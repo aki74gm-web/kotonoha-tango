@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useGame, type KeyStatus } from "@/lib/game-context";
 import { useColors } from "@/hooks/use-colors";
@@ -40,9 +40,11 @@ interface KeyProps {
   char: string;
   status: KeyStatus;
   onPress: (char: string) => void;
+  keySize: number;
+  fontSize: number;
 }
 
-function Key({ char, status, onPress }: KeyProps) {
+function Key({ char, status, onPress, keySize, fontSize }: KeyProps) {
   const colors = useColors();
 
   const bgColor = {
@@ -61,6 +63,8 @@ function Key({ char, status, onPress }: KeyProps) {
       style={({ pressed }) => [
         styles.key,
         {
+          width: keySize,
+          height: keySize,
           backgroundColor: bgColor,
           borderColor,
           opacity: pressed ? 0.7 : 1,
@@ -68,7 +72,7 @@ function Key({ char, status, onPress }: KeyProps) {
         },
       ]}
     >
-      <Text style={[styles.keyText, { color: textColor }]}>{char}</Text>
+      <Text style={[styles.keyText, { color: textColor, fontSize, lineHeight: fontSize * 1.4 }]}>{char}</Text>
     </Pressable>
   );
 }
@@ -77,7 +81,12 @@ function Key({ char, status, onPress }: KeyProps) {
 // キーボード本体
 // ============================================================
 
-export function KatakanaKeyboard() {
+export interface KatakanaKeyboardProps {
+  keySize: number;
+  keyGap: number;
+}
+
+export function KatakanaKeyboard({ keySize, keyGap }: KatakanaKeyboardProps) {
   const { inputChar, deleteChar, submitRow, state, keyStatuses } = useGame();
   const colors = useColors();
   const [tab, setTab] = useState<"basic" | "dakuten">("basic");
@@ -85,6 +94,8 @@ export function KatakanaKeyboard() {
   const rows = tab === "basic" ? ROWS_BASIC : ROWS_DAKUTEN;
   const isInputFull = state.currentInput.length === 5;
   const canSubmit = isInputFull && state.status === "playing";
+
+  const fontSize = Math.max(Math.floor(keySize * 0.32), 10);
 
   return (
     <View style={styles.container}>
@@ -116,25 +127,23 @@ export function KatakanaKeyboard() {
         </Pressable>
       </View>
 
-      {/* キー行 */}
-      <ScrollView
-        style={styles.keysScroll}
-        contentContainerStyle={styles.keysContent}
-        showsVerticalScrollIndicator={false}
-      >
+      {/* キー行（スクロールなし・全行表示） */}
+      <View style={[styles.keysContent, { gap: keyGap }]}>
         {rows.map((row, ri) => (
-          <View key={ri} style={styles.keyRow}>
+          <View key={ri} style={[styles.keyRow, { gap: keyGap }]}>
             {row.map((char) => (
               <Key
                 key={char}
                 char={char}
                 status={(keyStatuses[char] as KeyStatus) ?? "unused"}
                 onPress={inputChar}
+                keySize={keySize}
+                fontSize={fontSize}
               />
             ))}
           </View>
         ))}
-      </ScrollView>
+      </View>
 
       {/* 操作ボタン行 */}
       <View style={[styles.actionRow, { borderTopColor: colors.border }]}>
@@ -147,7 +156,7 @@ export function KatakanaKeyboard() {
             { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
           ]}
         >
-          <IconSymbol name="delete.left" size={20} color={colors.foreground} />
+          <IconSymbol name="delete.left" size={18} color={colors.foreground} />
         </Pressable>
 
         {/* 決定 */}
@@ -174,9 +183,6 @@ export function KatakanaKeyboard() {
 // スタイル
 // ============================================================
 
-const KEY_SIZE = 44;
-const KEY_GAP = 4;
-
 const styles = StyleSheet.create({
   container: {
     width: "100%",
@@ -184,49 +190,41 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: "row",
     borderBottomWidth: 1,
-    marginBottom: 6,
+    marginBottom: 4,
+    height: 36,
   },
   tab: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 6,
     alignItems: "center",
     borderBottomWidth: 2,
     borderBottomColor: "transparent",
   },
   tabText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
   },
-  keysScroll: {
-    maxHeight: 220,
-  },
   keysContent: {
-    gap: KEY_GAP,
-    paddingBottom: 4,
+    alignItems: "center",
   },
   keyRow: {
     flexDirection: "row",
     justifyContent: "center",
-    gap: KEY_GAP,
   },
   key: {
-    width: KEY_SIZE,
-    height: KEY_SIZE,
-    borderRadius: 6,
+    borderRadius: 5,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
   keyText: {
-    fontSize: 14,
     fontWeight: "600",
-    lineHeight: 20,
   },
   actionRow: {
     flexDirection: "row",
     gap: 8,
-    marginTop: 8,
-    paddingTop: 8,
+    marginTop: 6,
+    paddingTop: 6,
     borderTopWidth: 1,
     justifyContent: "center",
     alignItems: "center",
@@ -238,17 +236,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   deleteBtn: {
-    width: 56,
-    height: 44,
+    width: 52,
+    height: 40,
   },
   submitBtn: {
     flex: 1,
     maxWidth: 200,
-    height: 44,
+    height: 40,
     borderWidth: 0,
   },
   submitText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
   },
 });

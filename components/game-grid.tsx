@@ -13,9 +13,11 @@ interface TileViewProps {
   rowIndex: number;
   colIndex: number;
   isRevealing: boolean;
+  tileSize: number;
+  fontSize: number;
 }
 
-function TileView({ tile, rowIndex, colIndex, isRevealing }: TileViewProps) {
+function TileView({ tile, rowIndex, colIndex, isRevealing, tileSize, fontSize }: TileViewProps) {
   const colors = useColors();
   const flipAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -68,12 +70,14 @@ function TileView({ tile, rowIndex, colIndex, isRevealing }: TileViewProps) {
     : tileColor;
 
   return (
-    <Animated.View style={[styles.tileWrapper, { transform: [{ scale: scaleAnim }] }]}>
+    <Animated.View style={[{ width: tileSize, height: tileSize, position: "relative" }, { transform: [{ scale: scaleAnim }] }]}>
       {/* 表面（未確定） */}
       <Animated.View
         style={[
           styles.tile,
           {
+            width: tileSize,
+            height: tileSize,
             backgroundColor: tile.status === "filled" ? colors.tileFilled : colors.tileEmpty,
             borderColor,
             borderWidth: tile.status === "filled" ? 2 : 1.5,
@@ -83,7 +87,7 @@ function TileView({ tile, rowIndex, colIndex, isRevealing }: TileViewProps) {
           },
         ]}
       >
-        <Text style={[styles.tileText, { color: colors.foreground }]}>{tile.char}</Text>
+        <Text style={[styles.tileText, { color: colors.foreground, fontSize, lineHeight: fontSize * 1.4 }]}>{tile.char}</Text>
       </Animated.View>
 
       {/* 裏面（確定後・色付き） */}
@@ -91,6 +95,8 @@ function TileView({ tile, rowIndex, colIndex, isRevealing }: TileViewProps) {
         style={[
           styles.tile,
           {
+            width: tileSize,
+            height: tileSize,
             backgroundColor: tileColor,
             borderColor: tileColor,
             borderWidth: 0,
@@ -99,7 +105,7 @@ function TileView({ tile, rowIndex, colIndex, isRevealing }: TileViewProps) {
           },
         ]}
       >
-        <Text style={[styles.tileText, { color: textColor }]}>{tile.char}</Text>
+        <Text style={[styles.tileText, { color: textColor, fontSize, lineHeight: fontSize * 1.4 }]}>{tile.char}</Text>
       </Animated.View>
     </Animated.View>
   );
@@ -123,9 +129,12 @@ interface RowViewProps {
   rowIndex: number;
   isShaking: boolean;
   isRevealing: boolean;
+  tileSize: number;
+  tileGap: number;
+  fontSize: number;
 }
 
-function RowView({ tiles, rowIndex, isShaking, isRevealing }: RowViewProps) {
+function RowView({ tiles, rowIndex, isShaking, isRevealing, tileSize, tileGap, fontSize }: RowViewProps) {
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -143,7 +152,7 @@ function RowView({ tiles, rowIndex, isShaking, isRevealing }: RowViewProps) {
 
   return (
     <Animated.View
-      style={[styles.row, { transform: [{ translateX: shakeAnim }] }]}
+      style={[{ flexDirection: "row", gap: tileGap }, { transform: [{ translateX: shakeAnim }] }]}
     >
       {tiles.map((tile, ci) => (
         <TileView
@@ -152,6 +161,8 @@ function RowView({ tiles, rowIndex, isShaking, isRevealing }: RowViewProps) {
           rowIndex={rowIndex}
           colIndex={ci}
           isRevealing={isRevealing}
+          tileSize={tileSize}
+          fontSize={fontSize}
         />
       ))}
     </Animated.View>
@@ -162,8 +173,15 @@ function RowView({ tiles, rowIndex, isShaking, isRevealing }: RowViewProps) {
 // グリッド全体
 // ============================================================
 
-export function GameGrid() {
+export interface GameGridProps {
+  tileSize: number;
+  tileGap: number;
+}
+
+export function GameGrid({ tileSize, tileGap }: GameGridProps) {
   const { state, dispatch } = useGame();
+
+  const fontSize = Math.max(Math.floor(tileSize * 0.38), 12);
 
   // シェイク後にフラグをクリア
   useEffect(() => {
@@ -182,7 +200,7 @@ export function GameGrid() {
   }, [state.revealRow]);
 
   return (
-    <View style={styles.grid}>
+    <View style={[styles.grid, { gap: tileGap }]}>
       {state.grid.map((row, ri) => (
         <RowView
           key={ri}
@@ -190,6 +208,9 @@ export function GameGrid() {
           rowIndex={ri}
           isShaking={state.invalidShake && ri === state.currentRow}
           isRevealing={state.revealRow === ri}
+          tileSize={tileSize}
+          tileGap={tileGap}
+          fontSize={fontSize}
         />
       ))}
     </View>
@@ -200,33 +221,16 @@ export function GameGrid() {
 // スタイル
 // ============================================================
 
-const TILE_SIZE = 52;
-const TILE_GAP = 5;
-
 const styles = StyleSheet.create({
   grid: {
     alignItems: "center",
-    gap: TILE_GAP,
-  },
-  row: {
-    flexDirection: "row",
-    gap: TILE_GAP,
-  },
-  tileWrapper: {
-    width: TILE_SIZE,
-    height: TILE_SIZE,
-    position: "relative",
   },
   tile: {
-    width: TILE_SIZE,
-    height: TILE_SIZE,
     borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
   },
   tileText: {
-    fontSize: 20,
     fontWeight: "700",
-    lineHeight: 28,
   },
 });
