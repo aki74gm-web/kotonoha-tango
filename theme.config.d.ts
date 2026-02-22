@@ -7,7 +7,12 @@ export const themeColors: {
   border: { light: string; dark: string };
   success: { light: string; dark: string };
   warning: { light: string; dark: string };
-  error: { light: string; dark: string };
+  error:      { light: string; dark: string };
+  correct:    { light: string; dark: string };
+  present:    { light: string; dark: string };
+  absent:     { light: string; dark: string };
+  tileEmpty:  { light: string; dark: string };
+  tileFilled: { light: string; dark: string };
 };
 
 declare const themeConfig: {

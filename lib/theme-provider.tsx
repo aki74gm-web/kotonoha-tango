@@ -50,6 +50,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         "color-success": SchemeColors[colorScheme].success,
         "color-warning": SchemeColors[colorScheme].warning,
         "color-error": SchemeColors[colorScheme].error,
+        "color-correct": SchemeColors[colorScheme].correct,
+        "color-present": SchemeColors[colorScheme].present,
+        "color-absent": SchemeColors[colorScheme].absent,
+        "color-tileEmpty": SchemeColors[colorScheme].tileEmpty,
+        "color-tileFilled": SchemeColors[colorScheme].tileFilled,
       }),
     [colorScheme],
   );

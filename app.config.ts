@@ -32,7 +32,7 @@ const env = {
   appSlug: "kotonoha-tango",
   // S3 URL of the app logo - set this to the URL returned by generate_image when creating custom logo
   // Leave empty to use the default icon from assets/images/icon.png
-  logoUrl: "",
+  logoUrl: "https://private-us-east-1.manuscdn.com/sessionFile/H3DwYhWGurhbKcnYu9sO9n/sandbox/DY9qLtnV3RIPRoUclw8GKh-img-1_1771736151000_na1fn_aWNvbg.png?x-oss-process=image/resize,w_1920,h_1920/format,webp/quality,q_80&Expires=1798761600&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9wcml2YXRlLXVzLWVhc3QtMS5tYW51c2Nkbi5jb20vc2Vzc2lvbkZpbGUvSDNEd1loV0d1cmhiS2NuWXU5c085bi9zYW5kYm94L0RZOXFMdG5WM1JJUFJvVWNsdzhHS2gtaW1nLTFfMTc3MTczNjE1MTAwMF9uYTFmbl9hV052YmcucG5nP3gtb3NzLXByb2Nlc3M9aW1hZ2UvcmVzaXplLHdfMTkyMCxoXzE5MjAvZm9ybWF0LHdlYnAvcXVhbGl0eSxxXzgwIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzk4NzYxNjAwfX19XX0_&Key-Pair-Id=K2HSFNDJXOU9YS&Signature=PVlBwfZGUouNoDDnLPPeypQ2hRGFDYM~FtsLV2XqUQ6-Oe~awEaUUDcIXpDXvZEMjiUa06JuspyH0AOCjPulUQESrXBfG14mdCh~fdQbScfaui0IULk6UD2tcfiRpj62fhY~vJddEEXD0VrwGP1sVOEMkvG4GkWxTMco6ImjYtdCj2IadZ7TZLQvu3dKrDHZMD1-rwtU~SRlNgQhVa5EqFU19m3ZtGh6L38oPufNB5x8wf1R6xmQDWDfZ-coZ86G4Np~vj5acqbuFvgE3VJLHMcgxbhiFuuklhwoJ59aXscfPKVUUi47hcKlp1y7jkGDiCkvJKAAKWXxpMsnAhyYEg__",
   scheme: schemeFromBundleId,
   iosBundleId: bundleId,
   androidPackage: bundleId,
