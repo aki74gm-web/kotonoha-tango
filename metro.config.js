@@ -7,5 +7,6 @@ module.exports = withNativeWind(config, {
   input: "./global.css",
   // Force write CSS to file system instead of virtual modules
   // This fixes iOS styling issues in development mode
-  forceWriteFileSystem: true,
+  // Note: disabled for CI/Vercel builds where the cache dir may not exist
+  forceWriteFileSystem: process.env.CI !== "1" && process.env.VERCEL !== "1",
 });
