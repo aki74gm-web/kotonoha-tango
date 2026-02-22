@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Modal,
@@ -15,6 +15,7 @@ import * as Haptics from "expo-haptics";
 import { useGame, type TileStatus, WORD_LENGTH, MAX_TRIES } from "@/lib/game-context";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
+import { useShareUrl } from "@/hooks/use-share-url";
 
 // ============================================================
 // 絵文字マッピング
@@ -28,16 +29,69 @@ const STATUS_EMOJI: Record<TileStatus, string> = {
   empty:   "⬜",
 };
 
-function buildShareText(grid: ReturnType<typeof useGame>["state"]["grid"], currentRow: number, answer: string, seed: string, won: boolean): string {
+function buildShareText(
+  grid: ReturnType<typeof useGame>["state"]["grid"],
+  currentRow: number,
+  seed: string,
+  won: boolean,
+  shareUrl: string,
+): string {
   const rows = grid.slice(0, currentRow);
   const emojiGrid = rows
     .map((row) => row.map((t) => STATUS_EMOJI[t.status]).join(""))
     .join("\n");
 
   const result = won ? `${currentRow}/${MAX_TRIES}` : "失敗";
-  const shareUrl = `https://kotonoha-tango.app/play?seed=${seed}`;
 
-  return `ことのはたんご ${result}\n\n${emojiGrid}\n\n同じ問題に挑戦: ${shareUrl}`;
+  return `ことのはたんご ${result}\n問題 #${seed}\n\n${emojiGrid}\n\n同じ問題に挑戦: ${shareUrl}`;
+}
+
+// ============================================================
+// コピー完了フィードバック付きボタン
+// ============================================================
+
+function CopyButton({
+  onCopy,
+  label,
+  copiedLabel,
+  colors,
+  style,
+  textStyle,
+}: {
+  onCopy: () => Promise<void>;
+  label: string;
+  copiedLabel: string;
+  colors: ReturnType<typeof useColors>;
+  style: object;
+  textStyle: object;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handlePress = async () => {
+    await onCopy();
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <Pressable
+      onPress={handlePress}
+      style={({ pressed }) => [
+        styles.btn,
+        style,
+        { opacity: pressed ? 0.8 : 1 },
+      ]}
+    >
+      <IconSymbol
+        name={copied ? "checkmark" : "link"}
+        size={18}
+        color={colors.primary}
+      />
+      <Text style={[styles.btnTextPrimary, textStyle]}>
+        {copied ? copiedLabel : label}
+      </Text>
+    </Pressable>
+  );
 }
 
 // ============================================================
@@ -49,6 +103,7 @@ export function ResultModal() {
   const colors = useColors();
   const slideAnim = useRef(new Animated.Value(300)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+  const shareUrl = useShareUrl(state.seed);
 
   const isVisible = state.status === "won" || state.status === "lost";
 
@@ -75,22 +130,20 @@ export function ResultModal() {
   }, [isVisible, state.status]);
 
   const handleShare = async () => {
-    const text = buildShareText(state.grid, state.currentRow, state.answer, state.seed, state.status === "won");
+    const text = buildShareText(state.grid, state.currentRow, state.seed, state.status === "won", shareUrl);
     try {
       if (Platform.OS === "web") {
         await Clipboard.setStringAsync(text);
-        // TODO: トースト通知
       } else {
         await Share.share({ message: text });
       }
-    } catch (e) {
+    } catch {
       // ignore
     }
   };
 
   const handleCopyLink = async () => {
-    const url = `https://kotonoha-tango.app/play?seed=${state.seed}`;
-    await Clipboard.setStringAsync(url);
+    await Clipboard.setStringAsync(shareUrl);
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
@@ -115,7 +168,7 @@ export function ResultModal() {
           ]}
         >
           {/* ヘッダー */}
-          <Text style={[styles.emoji]}>{won ? "🎉" : "😢"}</Text>
+          <Text style={styles.emoji}>{won ? "🎉" : "😢"}</Text>
           <Text style={[styles.title, { color: colors.foreground }]}>
             {won ? "正解！" : "残念..."}
           </Text>
@@ -144,7 +197,7 @@ export function ResultModal() {
 
           {/* ボタン群 */}
           <View style={styles.buttons}>
-            {/* シェアボタン */}
+            {/* 結果をシェア */}
             <Pressable
               onPress={handleShare}
               style={({ pressed }) => [
@@ -159,19 +212,15 @@ export function ResultModal() {
               </Text>
             </Pressable>
 
-            {/* 友達に挑戦 */}
-            <Pressable
-              onPress={handleCopyLink}
-              style={({ pressed }) => [
-                styles.btn,
-                styles.challengeBtn,
-                { borderColor: colors.primary, opacity: pressed ? 0.8 : 1 },
-              ]}
-            >
-              <Text style={[styles.btnTextPrimary, { color: colors.primary }]}>
-                友達に挑戦させる
-              </Text>
-            </Pressable>
+            {/* 友達に挑戦させる（URLコピー、コピー完了フィードバック付き） */}
+            <CopyButton
+              onCopy={handleCopyLink}
+              label="友達に挑戦させる"
+              copiedLabel="URLをコピーしました！"
+              colors={colors}
+              style={{ borderWidth: 2, borderColor: colors.primary }}
+              textStyle={{ color: colors.primary }}
+            />
 
             {/* 新しいゲーム */}
             <Pressable
@@ -263,9 +312,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   shareBtn: {},
-  challengeBtn: {
-    borderWidth: 2,
-  },
   newGameBtn: {
     borderWidth: 1,
   },

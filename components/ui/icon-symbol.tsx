@@ -24,6 +24,8 @@ const MAPPING = {
   "delete.left": "backspace",
   "arrow.clockwise": "refresh",
   "info.circle": "info",
+  "checkmark": "check",
+  "link": "link",
 } as IconMapping;
 
 /**
