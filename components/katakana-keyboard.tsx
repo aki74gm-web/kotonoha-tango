@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 import { useGame, type KeyStatus } from "@/lib/game-context";
 import { useColors } from "@/hooks/use-colors";
@@ -7,29 +7,34 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 
 // ============================================================
 // キーボードレイアウト定義
+//
+// 縦書きレイアウト：右列から「アイウエオ」縦並び
+// 配列の末尾が右端（ア行）、先頭が左端（ン・ー）
 // ============================================================
 
-const ROWS_BASIC = [
-  ["ア", "イ", "ウ", "エ", "オ"],
-  ["カ", "キ", "ク", "ケ", "コ"],
-  ["サ", "シ", "ス", "セ", "ソ"],
-  ["タ", "チ", "ツ", "テ", "ト"],
-  ["ナ", "ニ", "ヌ", "ネ", "ノ"],
-  ["ハ", "ヒ", "フ", "ヘ", "ホ"],
-  ["マ", "ミ", "ム", "メ", "モ"],
-  ["ヤ", "ユ", "ヨ", "ラ", "リ"],
+// 五十音：左端→右端の順（右端がア行）
+const COLS_BASIC: string[][] = [
+  ["ン", "ー", "", "", ""],           // 左端
   ["ル", "レ", "ロ", "ワ", "ヲ"],
-  ["ン", "ー"],
+  ["ヤ", "ユ", "ヨ", "ラ", "リ"],
+  ["マ", "ミ", "ム", "メ", "モ"],
+  ["ハ", "ヒ", "フ", "ヘ", "ホ"],
+  ["ナ", "ニ", "ヌ", "ネ", "ノ"],
+  ["タ", "チ", "ツ", "テ", "ト"],
+  ["サ", "シ", "ス", "セ", "ソ"],
+  ["カ", "キ", "ク", "ケ", "コ"],
+  ["ア", "イ", "ウ", "エ", "オ"],    // 右端
 ];
 
-const ROWS_DAKUTEN = [
-  ["ガ", "ギ", "グ", "ゲ", "ゴ"],
-  ["ザ", "ジ", "ズ", "ゼ", "ゾ"],
-  ["ダ", "ヂ", "ヅ", "デ", "ド"],
-  ["バ", "ビ", "ブ", "ベ", "ボ"],
-  ["パ", "ピ", "プ", "ペ", "ポ"],
-  ["ァ", "ィ", "ゥ", "ェ", "ォ"],
+// 濁点・小文字：左端→右端の順
+const COLS_DAKUTEN: string[][] = [
   ["ャ", "ュ", "ョ", "ッ", "ヴ"],
+  ["ァ", "ィ", "ゥ", "ェ", "ォ"],
+  ["パ", "ピ", "プ", "ペ", "ポ"],
+  ["バ", "ビ", "ブ", "ベ", "ボ"],
+  ["ダ", "ヂ", "ヅ", "デ", "ド"],
+  ["ザ", "ジ", "ズ", "ゼ", "ゾ"],
+  ["ガ", "ギ", "グ", "ゲ", "ゴ"],
 ];
 
 // ============================================================
@@ -40,12 +45,17 @@ interface KeyProps {
   char: string;
   status: KeyStatus;
   onPress: (char: string) => void;
-  keySize: number;
+  keyW: number;
+  keyH: number;
   fontSize: number;
 }
 
-function Key({ char, status, onPress, keySize, fontSize }: KeyProps) {
+function Key({ char, status, onPress, keyW, keyH, fontSize }: KeyProps) {
   const colors = useColors();
+
+  if (!char) {
+    return <View style={{ width: keyW, height: keyH }} />;
+  }
 
   const bgColor = {
     correct: colors.correct,
@@ -63,8 +73,8 @@ function Key({ char, status, onPress, keySize, fontSize }: KeyProps) {
       style={({ pressed }) => [
         styles.key,
         {
-          width: keySize,
-          height: keySize,
+          width: keyW,
+          height: keyH,
           backgroundColor: bgColor,
           borderColor,
           opacity: pressed ? 0.7 : 1,
@@ -72,7 +82,9 @@ function Key({ char, status, onPress, keySize, fontSize }: KeyProps) {
         },
       ]}
     >
-      <Text style={[styles.keyText, { color: textColor, fontSize, lineHeight: fontSize * 1.4 }]}>{char}</Text>
+      <Text style={[styles.keyText, { color: textColor, fontSize, lineHeight: fontSize * 1.4 }]}>
+        {char}
+      </Text>
     </Pressable>
   );
 }
@@ -89,13 +101,24 @@ export interface KatakanaKeyboardProps {
 export function KatakanaKeyboard({ keySize, keyGap }: KatakanaKeyboardProps) {
   const { inputChar, deleteChar, submitRow, state, keyStatuses } = useGame();
   const colors = useColors();
+  const { width } = useWindowDimensions();
   const [tab, setTab] = useState<"basic" | "dakuten">("basic");
 
-  const rows = tab === "basic" ? ROWS_BASIC : ROWS_DAKUTEN;
+  const cols = tab === "basic" ? COLS_BASIC : COLS_DAKUTEN;
   const isInputFull = state.currentInput.length === 5;
   const canSubmit = isInputFull && state.status === "playing";
 
-  const fontSize = Math.max(Math.floor(keySize * 0.32), 10);
+  // 縦書きレイアウト：
+  //   行数 = 5（ア〜オ）、列数 = cols.length（行数）
+  //   keyH = keySize（縦方向）、keyW = 画面幅から逆算
+  const ROWS = 5;
+  const numCols = cols.length;
+  const ACTION_W = 44; // バックスペース＋決定ボタン列の幅
+  const PADDING_H = 24; // 左右padding合計
+  const availW = width - PADDING_H - ACTION_W - keyGap * (numCols + 1);
+  const keyW = Math.max(Math.floor(availW / numCols), 20);
+  const keyH = keySize;
+  const fontSize = Math.max(Math.floor(Math.min(keyW, keyH) * 0.42), 10);
 
   return (
     <View style={styles.container}>
@@ -127,53 +150,65 @@ export function KatakanaKeyboard({ keySize, keyGap }: KatakanaKeyboardProps) {
         </Pressable>
       </View>
 
-      {/* キー行（スクロールなし・全行表示） */}
-      <View style={[styles.keysContent, { gap: keyGap }]}>
-        {rows.map((row, ri) => (
-          <View key={ri} style={[styles.keyRow, { gap: keyGap }]}>
-            {row.map((char) => (
+      {/* キーグリッド（縦書き）＋アクション列 */}
+      <View style={[styles.gridRow, { gap: keyGap }]}>
+
+        {/* バックスペース＋決定ボタン列（左端） */}
+        <View style={[styles.actionCol, { gap: keyGap, width: ACTION_W }]}>
+          {/* バックスペース */}
+          <Pressable
+            onPress={deleteChar}
+            style={({ pressed }) => [
+              styles.actionBtn,
+              {
+                width: ACTION_W,
+                height: keyH * 2 + keyGap,
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                opacity: pressed ? 0.7 : 1,
+              },
+            ]}
+          >
+            <IconSymbol name="delete.left" size={16} color={colors.foreground} />
+          </Pressable>
+
+          {/* 決定ボタン */}
+          <Pressable
+            onPress={submitRow}
+            style={({ pressed }) => [
+              styles.actionBtn,
+              {
+                width: ACTION_W,
+                height: keyH * 3 + keyGap * 2,
+                backgroundColor: canSubmit ? colors.primary : colors.absent,
+                borderColor: "transparent",
+                opacity: pressed ? 0.8 : 1,
+              },
+            ]}
+            disabled={!canSubmit}
+          >
+            <Text style={[styles.submitText, { color: "#FFFFFF", fontSize: 13 }]}>
+              {"決\n定"}
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* 文字キー列（左端→右端：右端がア行） */}
+        {cols.map((col, ci) => (
+          <View key={ci} style={[styles.keyCol, { gap: keyGap }]}>
+            {col.map((char, ri) => (
               <Key
-                key={char}
+                key={ri}
                 char={char}
                 status={(keyStatuses[char] as KeyStatus) ?? "unused"}
                 onPress={inputChar}
-                keySize={keySize}
+                keyW={keyW}
+                keyH={keyH}
                 fontSize={fontSize}
               />
             ))}
           </View>
         ))}
-      </View>
-
-      {/* 操作ボタン行 */}
-      <View style={[styles.actionRow, { borderTopColor: colors.border }]}>
-        {/* バックスペース */}
-        <Pressable
-          onPress={deleteChar}
-          style={({ pressed }) => [
-            styles.actionBtn,
-            styles.deleteBtn,
-            { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
-          ]}
-        >
-          <IconSymbol name="delete.left" size={18} color={colors.foreground} />
-        </Pressable>
-
-        {/* 決定 */}
-        <Pressable
-          onPress={submitRow}
-          style={({ pressed }) => [
-            styles.actionBtn,
-            styles.submitBtn,
-            {
-              backgroundColor: canSubmit ? colors.primary : colors.absent,
-              opacity: pressed ? 0.8 : 1,
-            },
-          ]}
-          disabled={!canSubmit}
-        >
-          <Text style={[styles.submitText, { color: "#FFFFFF" }]}>決定</Text>
-        </Pressable>
       </View>
     </View>
   );
@@ -190,8 +225,8 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: "row",
     borderBottomWidth: 1,
-    marginBottom: 4,
-    height: 36,
+    marginBottom: 6,
+    height: 34,
   },
   tab: {
     flex: 1,
@@ -204,12 +239,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   },
-  keysContent: {
+  gridRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "center",
+  },
+  actionCol: {
+    flexDirection: "column",
     alignItems: "center",
   },
-  keyRow: {
-    flexDirection: "row",
+  actionBtn: {
+    borderRadius: 6,
+    borderWidth: 1,
+    alignItems: "center",
     justifyContent: "center",
+  },
+  keyCol: {
+    flexDirection: "column",
+    alignItems: "center",
   },
   key: {
     borderRadius: 5,
@@ -219,34 +266,11 @@ const styles = StyleSheet.create({
   },
   keyText: {
     fontWeight: "600",
-  },
-  actionRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 6,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  actionBtn: {
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-  },
-  deleteBtn: {
-    width: 52,
-    height: 40,
-  },
-  submitBtn: {
-    flex: 1,
-    maxWidth: 200,
-    height: 40,
-    borderWidth: 0,
+    textAlign: "center",
   },
   submitText: {
-    fontSize: 15,
     fontWeight: "700",
+    textAlign: "center",
+    lineHeight: 18,
   },
 });

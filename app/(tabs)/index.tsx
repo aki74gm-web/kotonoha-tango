@@ -115,25 +115,24 @@ function GameScreen() {
   // 利用可能な総高さ（ヘッダーとインセットを除く）
   const totalAvailable = height - topInset - bottomInset - HEADER_HEIGHT - SEED_ROW_HEIGHT;
 
-  // キーボードの行数と最適なキーサイズを計算
-  // 五十音タブ：10行、濁点タブ：7行（最大10行で計算）
-  const KB_ROWS = 10;
+  // 縦書きキーボードの高さ計算
+  // キーボードの高さ = タブ(34) + キー5行分の高さ + gap
+  // 文字列数は幅方向なので高さには影響しない
+  const KB_KEY_ROWS = 5; // 縦方向の行数（アイウエオ）
   const KEY_GAP = 4;
   const TILE_GAP = 4;
-  const KB_TAB_H = 38;    // タブバー
-  const KB_ACTION_H = 52; // 決定ボタン行
-  const KB_FIXED_H = KB_TAB_H + KB_ACTION_H + KEY_GAP * (KB_ROWS - 1) + 14;
+  const KB_TAB_H = 40;   // タブバー
+  const KB_FIXED_H = KB_TAB_H + KEY_GAP * (KB_KEY_ROWS - 1) + 10; // タブ + gap + padding
 
-  // 幅制約
-  const maxKeyByWidth = Math.floor((width - 24 - KEY_GAP * 4) / 5);
+  // タイル幅制約
   const maxTileByWidth = Math.floor((width - 32 - TILE_GAP * (WORD_LENGTH - 1)) / WORD_LENGTH);
 
-  // 動的最適化：キーサイズを小さくするほどタイルサイズが大きくなる
-  // 最小キーサイズ22px、最大キーサイズは幅制約と画面高さの両方で制限
+  // 動的最適化：キー高さ（keySize）を小さくするほどタイルサイズが大きくなる
+  // 最小 keySize = 24px、最大 = 52px
   let bestTileSize = 0;
-  let bestKeySize = 22;
-  for (let ks = 22; ks <= Math.min(maxKeyByWidth, 44); ks++) {
-    const kbH = KB_FIXED_H + ks * KB_ROWS;
+  let bestKeySize = 24;
+  for (let ks = 24; ks <= 60; ks++) {
+    const kbH = KB_FIXED_H + ks * KB_KEY_ROWS;
     const gridAvailH = totalAvailable - kbH;
     if (gridAvailH < 80) break;
     const maxTileByH = Math.floor((gridAvailH - TILE_GAP * (MAX_TRIES - 1)) / MAX_TRIES);
@@ -146,7 +145,7 @@ function GameScreen() {
 
   const tileSize = Math.max(bestTileSize, 12);
   const keySize = bestKeySize;
-  const kbTotalH = KB_FIXED_H + keySize * KB_ROWS;
+  const kbTotalH = KB_FIXED_H + keySize * KB_KEY_ROWS;
 
   // 実際のグリッド高さ
   const actualGridH = tileSize * MAX_TRIES + TILE_GAP * (MAX_TRIES - 1);
@@ -180,7 +179,7 @@ function GameScreen() {
       </View>
 
       {/* グリッド */}
-      <View style={[styles.gridArea, { height: actualGridH + 8 }]}>
+      <View style={[styles.gridArea, { height: actualGridH }]}>
         <GameGrid tileSize={tileSize} tileGap={TILE_GAP} />
       </View>
 
@@ -189,7 +188,6 @@ function GameScreen() {
         styles.keyboardArea,
         {
           borderTopColor: colors.border,
-          paddingBottom: bottomInset,
         }
       ]}>
         <KatakanaKeyboard keySize={keySize} keyGap={KEY_GAP} />
