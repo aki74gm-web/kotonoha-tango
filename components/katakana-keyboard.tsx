@@ -1,34 +1,32 @@
-import React, { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import React from "react";
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 import { useGame, type KeyStatus } from "@/lib/game-context";
 import { useColors } from "@/hooks/use-colors";
 
 // ============================================================
-// キーボードレイアウト定義（縦書き：左端→右端、右端がア行）
+// キーボードレイアウト定義
+// 各行は左→右の順（右端がア行）
+// "" = 空欄（点線枠）、null = 何も表示しない特殊キー
 // ============================================================
 
-const COLS_BASIC: string[][] = [
-  ["ン", "ー", "", "", ""],
-  ["ル", "レ", "ロ", "ワ", "ヲ"],
-  ["ヤ", "ユ", "ヨ", "ラ", "リ"],
-  ["マ", "ミ", "ム", "メ", "モ"],
-  ["ハ", "ヒ", "フ", "ヘ", "ホ"],
-  ["ナ", "ニ", "ヌ", "ネ", "ノ"],
-  ["タ", "チ", "ツ", "テ", "ト"],
-  ["サ", "シ", "ス", "セ", "ソ"],
-  ["カ", "キ", "ク", "ケ", "コ"],
-  ["ア", "イ", "ウ", "エ", "オ"],
+// 上半分：五十音
+const ROWS_BASIC: string[][] = [
+  ["ワ", "ラ", "ヤ", "マ", "ハ", "ナ", "タ", "サ", "カ", "ア"],
+  ["ヲ", "リ", "",  "ミ", "ヒ", "ニ", "チ", "シ", "キ", "イ"],
+  ["ン", "ル", "ユ", "ム", "フ", "ヌ", "ツ", "ス", "ク", "ウ"],
+  ["",  "レ", "",  "メ", "ヘ", "ネ", "テ", "セ", "ケ", "エ"],
+  ["",  "ロ", "ヨ", "モ", "ホ", "ノ", "ト", "ソ", "コ", "オ"],
 ];
 
-const COLS_DAKUTEN: string[][] = [
-  ["ャ", "ュ", "ョ", "ッ", "ヴ"],
-  ["ァ", "ィ", "ゥ", "ェ", "ォ"],
-  ["パ", "ピ", "プ", "ペ", "ポ"],
-  ["バ", "ビ", "ブ", "ベ", "ボ"],
-  ["ダ", "ヂ", "ヅ", "デ", "ド"],
-  ["ザ", "ジ", "ズ", "ゼ", "ゾ"],
-  ["ガ", "ギ", "グ", "ゲ", "ゴ"],
+// 下半分：濁点・小文字
+// 特殊キー: "BS" = バックスペース, "◀" = 左移動, "▶" = 右移動
+const ROWS_DAKUTEN: string[][] = [
+  ["ー", "",  "ャ", "パ", "バ", "",  "ダ", "ザ", "ガ", "ァ"],
+  ["",  "",  "",  "ピ", "ビ", "",  "ヂ", "ジ", "ギ", "ィ"],
+  ["",  "",  "ュ", "プ", "ブ", "ッ", "ヅ", "ズ", "グ", "ゥ"],
+  ["BS","",  "",  "ペ", "ベ", "",  "デ", "ゼ", "ゲ", "ェ"],
+  ["◀", "▶", "ョ", "ポ", "ボ", "",  "ド", "ゾ", "ゴ", "ォ"],
 ];
 
 // ============================================================
@@ -42,16 +40,57 @@ interface KeyProps {
   keyW: number;
   keyH: number;
   fontSize: number;
+  isSpecial?: boolean;
 }
 
-function Key({ char, status, onPress, keyW, keyH, fontSize }: KeyProps) {
+function Key({ char, status, onPress, keyW, keyH, fontSize, isSpecial }: KeyProps) {
   const colors = useColors();
 
-  if (!char) {
-    return <View style={{ width: keyW, height: keyH }} />;
+  // 空欄（点線枠）
+  if (char === "") {
+    return (
+      <View
+        style={[
+          styles.key,
+          {
+            width: keyW,
+            height: keyH,
+            backgroundColor: "transparent",
+            borderColor: colors.border,
+            borderWidth: 1,
+            borderStyle: "dashed",
+          },
+        ]}
+      />
+    );
   }
 
-  // 参考画像：未使用=水色、correct=緑、present=黄、absent=点線
+  // 特殊キー（BS・◀・▶）
+  if (isSpecial) {
+    return (
+      <Pressable
+        onPress={() => onPress(char)}
+        style={({ pressed }) => [
+          styles.key,
+          {
+            width: keyW,
+            height: keyH,
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderWidth: 1,
+            opacity: pressed ? 0.7 : 1,
+            transform: [{ scale: pressed ? 0.95 : 1 }],
+          },
+        ]}
+      >
+        <Text style={[styles.keyText, { color: colors.foreground, fontSize: fontSize - 1, lineHeight: fontSize * 1.4 }]}>
+          {char}
+        </Text>
+      </Pressable>
+    );
+  }
+
+  // 通常キー
   const bgColor = {
     correct: colors.correct,
     present: colors.present,
@@ -100,18 +139,44 @@ export function KatakanaKeyboard({ keySize, keyGap }: KatakanaKeyboardProps) {
   const colors = useColors();
   const { width } = useWindowDimensions();
 
-  const cols = COLS_BASIC;
-  const dakutenCols = COLS_DAKUTEN;
+  const NUM_COLS = 10;
+  const PADDING_H = 16;
+  const availW = width - PADDING_H - keyGap * (NUM_COLS - 1);
+  const keyW = Math.max(Math.floor(availW / NUM_COLS), 18);
+  const keyH = keySize;
+  const fontSize = Math.max(Math.floor(Math.min(keyW, keyH) * 0.48), 9);
+
   const isInputFull = state.currentInput.length === 5;
   const canSubmit = isInputFull && state.status === "playing";
 
-  // キーサイズ計算
-  const numCols = cols.length;
-  const PADDING_H = 16;
-  const availW = width - PADDING_H - keyGap * (numCols - 1);
-  const keyW = Math.max(Math.floor(availW / numCols), 20);
-  const keyH = keySize;
-  const fontSize = Math.max(Math.floor(Math.min(keyW, keyH) * 0.45), 9);
+  const SPECIAL_KEYS = new Set(["BS", "◀", "▶"]);
+
+  const handleKeyPress = (char: string) => {
+    if (char === "BS") {
+      deleteChar();
+    } else if (char === "◀" || char === "▶") {
+      // カーソル移動（将来実装）
+    } else {
+      inputChar(char);
+    }
+  };
+
+  const renderRow = (row: string[], rowIdx: number) => (
+    <View key={rowIdx} style={[styles.row, { gap: keyGap }]}>
+      {row.map((char, ci) => (
+        <Key
+          key={ci}
+          char={char}
+          status={(keyStatuses[char] as KeyStatus) ?? "unused"}
+          onPress={handleKeyPress}
+          keyW={keyW}
+          keyH={keyH}
+          fontSize={fontSize}
+          isSpecial={SPECIAL_KEYS.has(char)}
+        />
+      ))}
+    </View>
+  );
 
   return (
     <View style={styles.container}>
@@ -147,63 +212,14 @@ export function KatakanaKeyboard({ keySize, keyGap }: KatakanaKeyboardProps) {
         </Pressable>
       </View>
 
-      {/* 五十音キー（縦書き） */}
-      <View style={[styles.gridRow, { gap: keyGap }]}>
-        {cols.map((col, ci) => (
-          <View key={ci} style={[styles.keyCol, { gap: keyGap }]}>
-            {col.map((char, ri) => (
-              <Key
-                key={ri}
-                char={char}
-                status={(keyStatuses[char] as KeyStatus) ?? "unused"}
-                onPress={inputChar}
-                keyW={keyW}
-                keyH={keyH}
-                fontSize={fontSize}
-              />
-            ))}
-          </View>
-        ))}
+      {/* 五十音（上半分） */}
+      <View style={[styles.section, { gap: keyGap }]}>
+        {ROWS_BASIC.map((row, ri) => renderRow(row, ri))}
       </View>
 
-      {/* 濁点・小文字キー（縦書き） */}
-      <View style={[styles.gridRow, { gap: keyGap, marginTop: keyGap + 2 }]}>
-        {/* バックスペース列 */}
-        <View style={[styles.keyCol, { gap: keyGap }]}>
-          <Pressable
-            onPress={deleteChar}
-            style={({ pressed }) => [
-              styles.key,
-              {
-                width: keyW,
-                height: keyH * 2 + keyGap,
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderWidth: 1,
-                opacity: pressed ? 0.7 : 1,
-              },
-            ]}
-          >
-            <Text style={[styles.keyText, { color: colors.foreground, fontSize: fontSize - 1 }]}>BS</Text>
-          </Pressable>
-          <View style={{ width: keyW, height: keyH * 3 + keyGap * 2 }} />
-        </View>
-
-        {dakutenCols.map((col, ci) => (
-          <View key={ci} style={[styles.keyCol, { gap: keyGap }]}>
-            {col.map((char, ri) => (
-              <Key
-                key={ri}
-                char={char}
-                status={(keyStatuses[char] as KeyStatus) ?? "unused"}
-                onPress={inputChar}
-                keyW={keyW}
-                keyH={keyH}
-                fontSize={fontSize}
-              />
-            ))}
-          </View>
-        ))}
+      {/* 濁点・小文字（下半分） */}
+      <View style={[styles.section, { gap: keyGap, marginTop: keyGap + 2 }]}>
+        {ROWS_DAKUTEN.map((row, ri) => renderRow(row, ri + 10))}
       </View>
     </View>
   );
@@ -222,35 +238,34 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   kbInputBtn: {
-    height: 36,
-    borderRadius: 18,
+    height: 34,
+    borderRadius: 17,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 12,
   },
   kbInputText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "500",
   },
   submitBtn: {
-    height: 36,
-    paddingHorizontal: 20,
+    height: 34,
+    paddingHorizontal: 18,
     borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
-    minWidth: 60,
+    minWidth: 56,
   },
   submitText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
   },
-  gridRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  keyCol: {
+  section: {
     flexDirection: "column",
+  },
+  row: {
+    flexDirection: "row",
     alignItems: "center",
   },
   key: {

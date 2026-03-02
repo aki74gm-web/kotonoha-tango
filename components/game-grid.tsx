@@ -5,7 +5,7 @@ import { useGame, type Tile, type TileStatus, WORD_LENGTH, MAX_TRIES } from "@/l
 import { useColors } from "@/hooks/use-colors";
 
 // ============================================================
-// 単一タイル（四角）
+// 単一タイル
 // ============================================================
 
 interface TileViewProps {
@@ -23,7 +23,6 @@ function TileView({ tile, rowIndex, colIndex, isRevealing, tileSize, fontSize, s
   const flipAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  // 入力時のポップアニメーション
   useEffect(() => {
     if (tile.status === "filled" && tile.char) {
       Animated.sequence([
@@ -33,7 +32,6 @@ function TileView({ tile, rowIndex, colIndex, isRevealing, tileSize, fontSize, s
     }
   }, [tile.char]);
 
-  // 確定時のフリップアニメーション
   useEffect(() => {
     if (isRevealing && tile.status !== "empty" && tile.status !== "filled") {
       const delay = colIndex * 120;
@@ -179,7 +177,9 @@ function RowView({ tiles, rowIndex, isShaking, isRevealing, tileSize, tileGap, f
 }
 
 // ============================================================
-// グリッド全体（左：四角、右：丸の2分割）
+// グリッド全体
+// 左側（四角）: 1〜5答目（row 0〜4）
+// 右側（丸）:   6〜10答目（row 5〜9）
 // ============================================================
 
 export interface GameGridProps {
@@ -192,7 +192,8 @@ export function GameGrid({ tileSize, tileGap }: GameGridProps) {
   const colors = useColors();
   const fontSize = Math.max(Math.floor(tileSize * 0.38), 10);
 
-  // シェイク後にフラグをクリア
+  const HALF = MAX_TRIES / 2; // 5
+
   useEffect(() => {
     if (state.invalidShake) {
       const timer = setTimeout(() => dispatch({ type: "CLEAR_SHAKE" }), 400);
@@ -200,7 +201,6 @@ export function GameGrid({ tileSize, tileGap }: GameGridProps) {
     }
   }, [state.invalidShake]);
 
-  // リビール後にフラグをクリア
   useEffect(() => {
     if (state.revealRow !== null) {
       const timer = setTimeout(() => dispatch({ type: "CLEAR_REVEAL" }), WORD_LENGTH * 120 + 300);
@@ -209,10 +209,12 @@ export function GameGrid({ tileSize, tileGap }: GameGridProps) {
   }, [state.revealRow]);
 
   return (
-    <View style={[styles.gridWrapper, { gap: 8, backgroundColor: colors.gridBg, borderRadius: 8, padding: 6 }]}>
-      {/* 左グリッド：四角（文字入力） */}
+    <View
+      style={[styles.gridWrapper, { gap: 8, backgroundColor: colors.gridBg, borderRadius: 8, padding: 6 }]}
+    >
+      {/* 左グリッド：四角（1〜5答目） */}
       <View style={[styles.grid, { gap: tileGap }]}>
-        {state.grid.map((row, ri) => (
+        {state.grid.slice(0, HALF).map((row, ri) => (
           <RowView
             key={ri}
             tiles={row}
@@ -227,15 +229,15 @@ export function GameGrid({ tileSize, tileGap }: GameGridProps) {
         ))}
       </View>
 
-      {/* 右グリッド：丸（色ヒント） */}
+      {/* 右グリッド：丸（6〜10答目） */}
       <View style={[styles.grid, { gap: tileGap }]}>
-        {state.grid.map((row, ri) => (
+        {state.grid.slice(HALF, MAX_TRIES).map((row, ri) => (
           <RowView
-            key={ri}
+            key={ri + HALF}
             tiles={row}
-            rowIndex={ri}
-            isShaking={false}
-            isRevealing={state.revealRow === ri}
+            rowIndex={ri + HALF}
+            isShaking={state.invalidShake && (ri + HALF) === state.currentRow}
+            isRevealing={state.revealRow === (ri + HALF)}
             tileSize={tileSize}
             tileGap={tileGap}
             fontSize={fontSize}

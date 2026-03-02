@@ -134,6 +134,7 @@ function GameScreen() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
+  const [dynTileSize, setDynTileSize] = useState(0);
   const shareUrl = useShareUrl(state.seed);
 
   const deepLinkSeed = useDeepLinkSeed();
@@ -174,40 +175,30 @@ function GameScreen() {
   const HEADER_H = 44;
   const SUBHEADER_H = 28;
   const TOOLBAR_H = 52;
-  const KB_KEY_ROWS = 5;
+  const KB_KEY_ROWS = 5;  // 五十音5行 + 濁点5行
   const KEY_GAP = 3;
   const TILE_GAP = 3;
+  const HALF_TRIES = MAX_TRIES / 2; // 5
 
-  // キーボード高さ = 上部ボタン行(36) + 五十音5行 + gap + 濁点5行 + gap
-  const KB_TOP_ROW_H = 36;
+  // キーボード高さ = 上部ボタン行(34) + 五十音5行 + セクションgap + 濁点5行 + padding
+  const KB_TOP_ROW_H = 34;
   const KB_SECTION_GAP = 5;
-  const KB_FIXED_H = KB_TOP_ROW_H + KB_SECTION_GAP * 2 + KEY_GAP * (KB_KEY_ROWS - 1) * 2 + 8;
+  const KB_FIXED_H = KB_TOP_ROW_H + KB_SECTION_GAP * 3 + KEY_GAP * (KB_KEY_ROWS - 1) * 2 + 8;
 
   const totalAvailable = height - topInset - bottomInset - HEADER_H - SUBHEADER_H - TOOLBAR_H;
 
   // タイル幅制約（グリッドが2分割なので幅は半分）
-  const GRID_PADDING = 16;
+  const GRID_PADDING = 8;
   const GRID_GAP = 8;
-  const halfWidth = (width - GRID_PADDING * 2 - GRID_GAP) / 2;
-  const maxTileByWidth = Math.floor((halfWidth - TILE_GAP * (WORD_LENGTH - 1) - 12) / WORD_LENGTH);
+  // gridWrapper: padding=6, gap=8、左右分割
+  const halfWidth = (width - GRID_PADDING * 2 - 12 - GRID_GAP) / 2;
+  const maxTileByWidth = Math.floor((halfWidth - TILE_GAP * (WORD_LENGTH - 1)) / WORD_LENGTH);
 
-  let bestTileSize = 0;
-  let bestKeySize = 20;
-  for (let ks = 20; ks <= 50; ks++) {
-    const kbH = KB_FIXED_H + ks * KB_KEY_ROWS * 2;
-    const gridAvailH = totalAvailable - kbH;
-    if (gridAvailH < 60) break;
-    const maxTileByH = Math.floor((gridAvailH - TILE_GAP * (MAX_TRIES - 1)) / MAX_TRIES);
-    const ts = Math.min(maxTileByWidth, maxTileByH, 40);
-    if (ts > bestTileSize) {
-      bestTileSize = ts;
-      bestKeySize = ks;
-    }
-  }
-
-  const tileSize = Math.max(bestTileSize, 10);
-  const keySize = bestKeySize;
-  const actualGridH = tileSize * MAX_TRIES + TILE_GAP * (MAX_TRIES - 1);
+  // タイルサイズは幅制約で固定、余白をキーサイズに配分
+  const tileSize = Math.max(maxTileByWidth, 10);
+  const actualGridH = tileSize * HALF_TRIES + TILE_GAP * (HALF_TRIES - 1);
+  const remainForKb = totalAvailable - actualGridH;
+  const keySize = Math.max(Math.floor((remainForKb - KB_FIXED_H) / (KB_KEY_ROWS * 2)), 18);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: topInset }]}>
@@ -250,8 +241,20 @@ function GameScreen() {
       </View>
 
       {/* グリッドエリア */}
-      <View style={[styles.gridArea, { height: actualGridH + 12 }]}>
-        <GameGrid tileSize={tileSize} tileGap={TILE_GAP} />
+      <View
+        style={[styles.gridArea, { flex: 1 }]}
+        onLayout={(e) => {
+          const { width: gw, height: gh } = e.nativeEvent.layout;
+          const HALF_T = MAX_TRIES / 2;
+          // gridArea内のグリッドwrapper: padding=6, gap=8
+          const innerH = gh - 12; // padding top+bottom
+          const halfW = (gw - 12 - 8) / 2; // padding*2 + gap
+          const byH = Math.floor((innerH - TILE_GAP * (HALF_T - 1)) / HALF_T);
+          const byW = Math.floor((halfW - TILE_GAP * (WORD_LENGTH - 1)) / WORD_LENGTH);
+          setDynTileSize(Math.max(Math.min(byH, byW, 60), 10));
+        }}
+      >
+        <GameGrid tileSize={dynTileSize || tileSize} tileGap={TILE_GAP} />
       </View>
 
       {/* キーボード */}
@@ -323,9 +326,11 @@ const styles = StyleSheet.create({
   subHeaderText: { fontSize: 10, fontWeight: "500" },
   timerText: { fontSize: 10, fontWeight: "600" },
   gridArea: {
+    flex: 1,
     justifyContent: "center",
-    alignItems: "center",
+    alignItems: "stretch",
     paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   keyboardArea: {
     paddingHorizontal: 8,
