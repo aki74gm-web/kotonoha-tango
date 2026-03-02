@@ -13,6 +13,9 @@ export const themeColors: {
   absent:     { light: string; dark: string };
   tileEmpty:  { light: string; dark: string };
   tileFilled: { light: string; dark: string };
+  accent:     { light: string; dark: string };
+  keyBg:      { light: string; dark: string };
+  gridBg:     { light: string; dark: string };
 };
 
 declare const themeConfig: {

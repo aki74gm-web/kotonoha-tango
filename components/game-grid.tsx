@@ -5,7 +5,7 @@ import { useGame, type Tile, type TileStatus, WORD_LENGTH, MAX_TRIES } from "@/l
 import { useColors } from "@/hooks/use-colors";
 
 // ============================================================
-// 単一タイル
+// 単一タイル（四角）
 // ============================================================
 
 interface TileViewProps {
@@ -15,9 +15,10 @@ interface TileViewProps {
   isRevealing: boolean;
   tileSize: number;
   fontSize: number;
+  shape: "square" | "circle";
 }
 
-function TileView({ tile, rowIndex, colIndex, isRevealing, tileSize, fontSize }: TileViewProps) {
+function TileView({ tile, rowIndex, colIndex, isRevealing, tileSize, fontSize, shape }: TileViewProps) {
   const colors = useColors();
   const flipAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -38,11 +39,7 @@ function TileView({ tile, rowIndex, colIndex, isRevealing, tileSize, fontSize }:
       const delay = colIndex * 120;
       Animated.sequence([
         Animated.delay(delay),
-        Animated.timing(flipAnim, {
-          toValue: 1,
-          duration: 250,
-          useNativeDriver: true,
-        }),
+        Animated.timing(flipAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
       ]).start();
     } else if (!isRevealing) {
       flipAnim.setValue(0);
@@ -53,7 +50,6 @@ function TileView({ tile, rowIndex, colIndex, isRevealing, tileSize, fontSize }:
     inputRange: [0, 0.5, 1],
     outputRange: ["0deg", "-90deg", "-90deg"],
   });
-
   const backRotate = flipAnim.interpolate({
     inputRange: [0, 0.5, 1],
     outputRange: ["90deg", "90deg", "0deg"],
@@ -61,13 +57,14 @@ function TileView({ tile, rowIndex, colIndex, isRevealing, tileSize, fontSize }:
 
   const tileColor = getTileColor(tile.status, colors);
   const textColor = tile.status === "empty" || tile.status === "filled"
-    ? colors.foreground
-    : "#FFFFFF";
+    ? colors.foreground : "#FFFFFF";
   const borderColor = tile.status === "filled"
     ? colors.foreground
     : tile.status === "empty"
     ? colors.border
     : tileColor;
+
+  const borderRadius = shape === "circle" ? tileSize / 2 : 6;
 
   return (
     <Animated.View style={[{ width: tileSize, height: tileSize, position: "relative" }, { transform: [{ scale: scaleAnim }] }]}>
@@ -78,6 +75,7 @@ function TileView({ tile, rowIndex, colIndex, isRevealing, tileSize, fontSize }:
           {
             width: tileSize,
             height: tileSize,
+            borderRadius,
             backgroundColor: tile.status === "filled" ? colors.tileFilled : colors.tileEmpty,
             borderColor,
             borderWidth: tile.status === "filled" ? 2 : 1.5,
@@ -87,7 +85,11 @@ function TileView({ tile, rowIndex, colIndex, isRevealing, tileSize, fontSize }:
           },
         ]}
       >
-        <Text style={[styles.tileText, { color: colors.foreground, fontSize, lineHeight: fontSize * 1.4 }]}>{tile.char}</Text>
+        {shape === "square" && (
+          <Text style={[styles.tileText, { color: colors.foreground, fontSize, lineHeight: fontSize * 1.4 }]}>
+            {tile.char}
+          </Text>
+        )}
       </Animated.View>
 
       {/* 裏面（確定後・色付き） */}
@@ -97,6 +99,7 @@ function TileView({ tile, rowIndex, colIndex, isRevealing, tileSize, fontSize }:
           {
             width: tileSize,
             height: tileSize,
+            borderRadius,
             backgroundColor: tileColor,
             borderColor: tileColor,
             borderWidth: 0,
@@ -105,7 +108,11 @@ function TileView({ tile, rowIndex, colIndex, isRevealing, tileSize, fontSize }:
           },
         ]}
       >
-        <Text style={[styles.tileText, { color: textColor, fontSize, lineHeight: fontSize * 1.4 }]}>{tile.char}</Text>
+        {shape === "square" && (
+          <Text style={[styles.tileText, { color: textColor, fontSize, lineHeight: fontSize * 1.4 }]}>
+            {tile.char}
+          </Text>
+        )}
       </Animated.View>
     </Animated.View>
   );
@@ -132,9 +139,10 @@ interface RowViewProps {
   tileSize: number;
   tileGap: number;
   fontSize: number;
+  shape: "square" | "circle";
 }
 
-function RowView({ tiles, rowIndex, isShaking, isRevealing, tileSize, tileGap, fontSize }: RowViewProps) {
+function RowView({ tiles, rowIndex, isShaking, isRevealing, tileSize, tileGap, fontSize, shape }: RowViewProps) {
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -163,6 +171,7 @@ function RowView({ tiles, rowIndex, isShaking, isRevealing, tileSize, tileGap, f
           isRevealing={isRevealing}
           tileSize={tileSize}
           fontSize={fontSize}
+          shape={shape}
         />
       ))}
     </Animated.View>
@@ -170,7 +179,7 @@ function RowView({ tiles, rowIndex, isShaking, isRevealing, tileSize, tileGap, f
 }
 
 // ============================================================
-// グリッド全体
+// グリッド全体（左：四角、右：丸の2分割）
 // ============================================================
 
 export interface GameGridProps {
@@ -180,8 +189,8 @@ export interface GameGridProps {
 
 export function GameGrid({ tileSize, tileGap }: GameGridProps) {
   const { state, dispatch } = useGame();
-
-  const fontSize = Math.max(Math.floor(tileSize * 0.38), 12);
+  const colors = useColors();
+  const fontSize = Math.max(Math.floor(tileSize * 0.38), 10);
 
   // シェイク後にフラグをクリア
   useEffect(() => {
@@ -200,19 +209,40 @@ export function GameGrid({ tileSize, tileGap }: GameGridProps) {
   }, [state.revealRow]);
 
   return (
-    <View style={[styles.grid, { gap: tileGap }]}>
-      {state.grid.map((row, ri) => (
-        <RowView
-          key={ri}
-          tiles={row}
-          rowIndex={ri}
-          isShaking={state.invalidShake && ri === state.currentRow}
-          isRevealing={state.revealRow === ri}
-          tileSize={tileSize}
-          tileGap={tileGap}
-          fontSize={fontSize}
-        />
-      ))}
+    <View style={[styles.gridWrapper, { gap: 8, backgroundColor: colors.gridBg, borderRadius: 8, padding: 6 }]}>
+      {/* 左グリッド：四角（文字入力） */}
+      <View style={[styles.grid, { gap: tileGap }]}>
+        {state.grid.map((row, ri) => (
+          <RowView
+            key={ri}
+            tiles={row}
+            rowIndex={ri}
+            isShaking={state.invalidShake && ri === state.currentRow}
+            isRevealing={state.revealRow === ri}
+            tileSize={tileSize}
+            tileGap={tileGap}
+            fontSize={fontSize}
+            shape="square"
+          />
+        ))}
+      </View>
+
+      {/* 右グリッド：丸（色ヒント） */}
+      <View style={[styles.grid, { gap: tileGap }]}>
+        {state.grid.map((row, ri) => (
+          <RowView
+            key={ri}
+            tiles={row}
+            rowIndex={ri}
+            isShaking={false}
+            isRevealing={state.revealRow === ri}
+            tileSize={tileSize}
+            tileGap={tileGap}
+            fontSize={fontSize}
+            shape="circle"
+          />
+        ))}
+      </View>
     </View>
   );
 }
@@ -222,11 +252,14 @@ export function GameGrid({ tileSize, tileGap }: GameGridProps) {
 // ============================================================
 
 const styles = StyleSheet.create({
+  gridWrapper: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
   grid: {
     alignItems: "center",
   },
   tile: {
-    borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
   },

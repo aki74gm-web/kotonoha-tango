@@ -1,20 +1,15 @@
 import React, { useState } from "react";
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 import { useGame, type KeyStatus } from "@/lib/game-context";
 import { useColors } from "@/hooks/use-colors";
-import { IconSymbol } from "@/components/ui/icon-symbol";
 
 // ============================================================
-// キーボードレイアウト定義
-//
-// 縦書きレイアウト：右列から「アイウエオ」縦並び
-// 配列の末尾が右端（ア行）、先頭が左端（ン・ー）
+// キーボードレイアウト定義（縦書き：左端→右端、右端がア行）
 // ============================================================
 
-// 五十音：左端→右端の順（右端がア行）
 const COLS_BASIC: string[][] = [
-  ["ン", "ー", "", "", ""],           // 左端
+  ["ン", "ー", "", "", ""],
   ["ル", "レ", "ロ", "ワ", "ヲ"],
   ["ヤ", "ユ", "ヨ", "ラ", "リ"],
   ["マ", "ミ", "ム", "メ", "モ"],
@@ -23,10 +18,9 @@ const COLS_BASIC: string[][] = [
   ["タ", "チ", "ツ", "テ", "ト"],
   ["サ", "シ", "ス", "セ", "ソ"],
   ["カ", "キ", "ク", "ケ", "コ"],
-  ["ア", "イ", "ウ", "エ", "オ"],    // 右端
+  ["ア", "イ", "ウ", "エ", "オ"],
 ];
 
-// 濁点・小文字：左端→右端の順
 const COLS_DAKUTEN: string[][] = [
   ["ャ", "ュ", "ョ", "ッ", "ヴ"],
   ["ァ", "ィ", "ゥ", "ェ", "ォ"],
@@ -57,15 +51,16 @@ function Key({ char, status, onPress, keyW, keyH, fontSize }: KeyProps) {
     return <View style={{ width: keyW, height: keyH }} />;
   }
 
+  // 参考画像：未使用=水色、correct=緑、present=黄、absent=点線
   const bgColor = {
     correct: colors.correct,
     present: colors.present,
-    absent: colors.absent,
-    unused: colors.surface,
+    absent: colors.surface,
+    unused: colors.keyBg,
   }[status];
 
-  const textColor = status === "unused" ? colors.foreground : "#FFFFFF";
-  const borderColor = status === "unused" ? colors.border : bgColor;
+  const textColor = status === "absent" ? colors.muted : "#FFFFFF";
+  const isDashed = status === "absent";
 
   return (
     <Pressable
@@ -76,7 +71,9 @@ function Key({ char, status, onPress, keyW, keyH, fontSize }: KeyProps) {
           width: keyW,
           height: keyH,
           backgroundColor: bgColor,
-          borderColor,
+          borderColor: isDashed ? colors.border : bgColor,
+          borderWidth: 1,
+          borderStyle: isDashed ? "dashed" : "solid",
           opacity: pressed ? 0.7 : 1,
           transform: [{ scale: pressed ? 0.95 : 1 }],
         },
@@ -102,99 +99,97 @@ export function KatakanaKeyboard({ keySize, keyGap }: KatakanaKeyboardProps) {
   const { inputChar, deleteChar, submitRow, state, keyStatuses } = useGame();
   const colors = useColors();
   const { width } = useWindowDimensions();
-  const [tab, setTab] = useState<"basic" | "dakuten">("basic");
 
-  const cols = tab === "basic" ? COLS_BASIC : COLS_DAKUTEN;
+  const cols = COLS_BASIC;
+  const dakutenCols = COLS_DAKUTEN;
   const isInputFull = state.currentInput.length === 5;
   const canSubmit = isInputFull && state.status === "playing";
 
-  // 縦書きレイアウト：
-  //   行数 = 5（ア〜オ）、列数 = cols.length（行数）
-  //   keyH = keySize（縦方向）、keyW = 画面幅から逆算
-  const ROWS = 5;
+  // キーサイズ計算
   const numCols = cols.length;
-  const ACTION_W = 44; // バックスペース＋決定ボタン列の幅
-  const PADDING_H = 24; // 左右padding合計
-  const availW = width - PADDING_H - ACTION_W - keyGap * (numCols + 1);
+  const PADDING_H = 16;
+  const availW = width - PADDING_H - keyGap * (numCols - 1);
   const keyW = Math.max(Math.floor(availW / numCols), 20);
   const keyH = keySize;
-  const fontSize = Math.max(Math.floor(Math.min(keyW, keyH) * 0.42), 10);
+  const fontSize = Math.max(Math.floor(Math.min(keyW, keyH) * 0.45), 9);
 
   return (
     <View style={styles.container}>
-      {/* タブ切替 */}
-      <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
+      {/* 上部：キーボード入力用ボタン + 決定ボタン */}
+      <View style={[styles.topRow, { marginBottom: keyGap + 2 }]}>
         <Pressable
-          onPress={() => setTab("basic")}
           style={({ pressed }) => [
-            styles.tab,
-            tab === "basic" && { borderBottomColor: colors.primary, borderBottomWidth: 2 },
-            { opacity: pressed ? 0.7 : 1 },
+            styles.kbInputBtn,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              opacity: pressed ? 0.7 : 1,
+              flex: 1,
+              marginRight: 8,
+            },
           ]}
         >
-          <Text style={[styles.tabText, { color: tab === "basic" ? colors.primary : colors.muted }]}>
-            五十音
-          </Text>
+          <Text style={[styles.kbInputText, { color: colors.foreground }]}>キーボード入力用</Text>
         </Pressable>
+
         <Pressable
-          onPress={() => setTab("dakuten")}
+          onPress={submitRow}
           style={({ pressed }) => [
-            styles.tab,
-            tab === "dakuten" && { borderBottomColor: colors.primary, borderBottomWidth: 2 },
-            { opacity: pressed ? 0.7 : 1 },
+            styles.submitBtn,
+            {
+              backgroundColor: canSubmit ? colors.accent : colors.muted,
+              opacity: pressed ? 0.8 : 1,
+            },
           ]}
+          disabled={!canSubmit}
         >
-          <Text style={[styles.tabText, { color: tab === "dakuten" ? colors.primary : colors.muted }]}>
-            濁点・小文字
-          </Text>
+          <Text style={[styles.submitText, { color: "#FFFFFF" }]}>決定</Text>
         </Pressable>
       </View>
 
-      {/* キーグリッド（縦書き）＋アクション列 */}
+      {/* 五十音キー（縦書き） */}
       <View style={[styles.gridRow, { gap: keyGap }]}>
+        {cols.map((col, ci) => (
+          <View key={ci} style={[styles.keyCol, { gap: keyGap }]}>
+            {col.map((char, ri) => (
+              <Key
+                key={ri}
+                char={char}
+                status={(keyStatuses[char] as KeyStatus) ?? "unused"}
+                onPress={inputChar}
+                keyW={keyW}
+                keyH={keyH}
+                fontSize={fontSize}
+              />
+            ))}
+          </View>
+        ))}
+      </View>
 
-        {/* バックスペース＋決定ボタン列（左端） */}
-        <View style={[styles.actionCol, { gap: keyGap, width: ACTION_W }]}>
-          {/* バックスペース */}
+      {/* 濁点・小文字キー（縦書き） */}
+      <View style={[styles.gridRow, { gap: keyGap, marginTop: keyGap + 2 }]}>
+        {/* バックスペース列 */}
+        <View style={[styles.keyCol, { gap: keyGap }]}>
           <Pressable
             onPress={deleteChar}
             style={({ pressed }) => [
-              styles.actionBtn,
+              styles.key,
               {
-                width: ACTION_W,
+                width: keyW,
                 height: keyH * 2 + keyGap,
                 backgroundColor: colors.surface,
                 borderColor: colors.border,
+                borderWidth: 1,
                 opacity: pressed ? 0.7 : 1,
               },
             ]}
           >
-            <IconSymbol name="delete.left" size={16} color={colors.foreground} />
+            <Text style={[styles.keyText, { color: colors.foreground, fontSize: fontSize - 1 }]}>BS</Text>
           </Pressable>
-
-          {/* 決定ボタン */}
-          <Pressable
-            onPress={submitRow}
-            style={({ pressed }) => [
-              styles.actionBtn,
-              {
-                width: ACTION_W,
-                height: keyH * 3 + keyGap * 2,
-                backgroundColor: canSubmit ? colors.primary : colors.absent,
-                borderColor: "transparent",
-                opacity: pressed ? 0.8 : 1,
-              },
-            ]}
-            disabled={!canSubmit}
-          >
-            <Text style={[styles.submitText, { color: "#FFFFFF", fontSize: 13 }]}>
-              {"決\n定"}
-            </Text>
-          </Pressable>
+          <View style={{ width: keyW, height: keyH * 3 + keyGap * 2 }} />
         </View>
 
-        {/* 文字キー列（左端→右端：右端がア行） */}
-        {cols.map((col, ci) => (
+        {dakutenCols.map((col, ci) => (
           <View key={ci} style={[styles.keyCol, { gap: keyGap }]}>
             {col.map((char, ri) => (
               <Key
@@ -222,37 +217,37 @@ const styles = StyleSheet.create({
   container: {
     width: "100%",
   },
-  tabBar: {
+  topRow: {
     flexDirection: "row",
-    borderBottomWidth: 1,
-    marginBottom: 6,
-    height: 34,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 6,
     alignItems: "center",
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
   },
-  tabText: {
-    fontSize: 12,
-    fontWeight: "600",
+  kbInputBtn: {
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  kbInputText: {
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  submitBtn: {
+    height: 36,
+    paddingHorizontal: 20,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 60,
+  },
+  submitText: {
+    fontSize: 15,
+    fontWeight: "700",
   },
   gridRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    justifyContent: "center",
-  },
-  actionCol: {
-    flexDirection: "column",
-    alignItems: "center",
-  },
-  actionBtn: {
-    borderRadius: 6,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
   },
   keyCol: {
     flexDirection: "column",
@@ -260,17 +255,11 @@ const styles = StyleSheet.create({
   },
   key: {
     borderRadius: 5,
-    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
   keyText: {
     fontWeight: "600",
     textAlign: "center",
-  },
-  submitText: {
-    fontWeight: "700",
-    textAlign: "center",
-    lineHeight: 18,
   },
 });

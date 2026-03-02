@@ -24,7 +24,7 @@ import { useDeepLinkSeed } from "@/hooks/use-deep-link-seed";
 import { useShareUrl } from "@/hooks/use-share-url";
 
 // ============================================================
-// トースト通知コンポーネント
+// トースト通知
 // ============================================================
 
 function Toast({ message, visible }: { message: string; visible: boolean }) {
@@ -43,10 +43,7 @@ function Toast({ message, visible }: { message: string; visible: boolean }) {
 
   return (
     <Animated.View
-      style={[
-        styles.toast,
-        { backgroundColor: colors.foreground, opacity },
-      ]}
+      style={[styles.toast, { backgroundColor: colors.foreground, opacity }]}
       pointerEvents="none"
     >
       <Text style={[styles.toastText, { color: colors.background }]}>{message}</Text>
@@ -55,7 +52,78 @@ function Toast({ message, visible }: { message: string; visible: boolean }) {
 }
 
 // ============================================================
-// ゲーム画面内部（GameProvider内で使う）
+// タイマーコンポーネント
+// ============================================================
+
+function CountdownTimer() {
+  const colors = useColors();
+  const [timeLeft, setTimeLeft] = useState("");
+
+  useEffect(() => {
+    const update = () => {
+      const now = new Date();
+      const next = new Date();
+      next.setHours(24, 0, 0, 0);
+      const diff = next.getTime() - now.getTime();
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setTimeLeft(
+        `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+      );
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <Text style={[styles.timerText, { color: colors.foreground }]}>
+      残り時間：{timeLeft}
+    </Text>
+  );
+}
+
+// ============================================================
+// 下部ツールバー
+// ============================================================
+
+function BottomToolbar() {
+  const colors = useColors();
+  const { state, dispatch } = useGame();
+
+  const tools = [
+    { label: "左に移動", icon: "◀" },
+    { label: "入力\n固定", icon: "🔒" },
+    { label: "右に移動", icon: "▶" },
+    { label: "左を削除", icon: "⬅" },
+    { label: "右を削除", icon: "➡" },
+  ];
+
+  return (
+    <View style={[styles.toolbar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+      {tools.map((tool, i) => (
+        <Pressable
+          key={i}
+          style={({ pressed }) => [
+            styles.toolBtn,
+            {
+              backgroundColor: colors.background,
+              borderColor: colors.border,
+              opacity: pressed ? 0.7 : 1,
+            },
+          ]}
+        >
+          <Text style={[styles.toolIcon, { color: colors.foreground }]}>{tool.icon}</Text>
+          <Text style={[styles.toolLabel, { color: colors.foreground }]}>{tool.label}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+// ============================================================
+// ゲーム画面
 // ============================================================
 
 function GameScreen() {
@@ -68,7 +136,6 @@ function GameScreen() {
   const [toastVisible, setToastVisible] = useState(false);
   const shareUrl = useShareUrl(state.seed);
 
-  // ディープリンクでシードが変わったら新しいゲームを開始
   const deepLinkSeed = useDeepLinkSeed();
   const appliedSeedRef = useRef<string | null>(null);
   useEffect(() => {
@@ -84,11 +151,9 @@ function GameScreen() {
     setTimeout(() => setToastVisible(true), 10);
   };
 
-  const handleHeaderShare = async () => {
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-    const text = `ことのはたんご 問題 #${state.seed}\n同じ問題に挑戦してみて！\n${shareUrl}`;
+  const handleShare = async () => {
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const text = `ことのはたんご 問題 #${state.seed}\n${shareUrl}`;
     try {
       if (Platform.OS === "web") {
         await Clipboard.setStringAsync(shareUrl);
@@ -96,9 +161,7 @@ function GameScreen() {
       } else {
         await Share.share({ message: text, url: shareUrl });
       }
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
   };
 
   // ============================================================
@@ -106,92 +169,98 @@ function GameScreen() {
   // ============================================================
 
   const topInset = insets.top;
-  const bottomInset = Math.max(insets.bottom, 8);
+  const bottomInset = Math.max(insets.bottom, 4);
 
-  // 固定要素の高さ
-  const HEADER_HEIGHT = 48;
-  const SEED_ROW_HEIGHT = 24;
+  const HEADER_H = 44;
+  const SUBHEADER_H = 28;
+  const TOOLBAR_H = 52;
+  const KB_KEY_ROWS = 5;
+  const KEY_GAP = 3;
+  const TILE_GAP = 3;
 
-  // 利用可能な総高さ（ヘッダーとインセットを除く）
-  const totalAvailable = height - topInset - bottomInset - HEADER_HEIGHT - SEED_ROW_HEIGHT;
+  // キーボード高さ = 上部ボタン行(36) + 五十音5行 + gap + 濁点5行 + gap
+  const KB_TOP_ROW_H = 36;
+  const KB_SECTION_GAP = 5;
+  const KB_FIXED_H = KB_TOP_ROW_H + KB_SECTION_GAP * 2 + KEY_GAP * (KB_KEY_ROWS - 1) * 2 + 8;
 
-  // 縦書きキーボードの高さ計算
-  // キーボードの高さ = タブ(34) + キー5行分の高さ + gap
-  // 文字列数は幅方向なので高さには影響しない
-  const KB_KEY_ROWS = 5; // 縦方向の行数（アイウエオ）
-  const KEY_GAP = 4;
-  const TILE_GAP = 4;
-  const KB_TAB_H = 40;   // タブバー
-  const KB_FIXED_H = KB_TAB_H + KEY_GAP * (KB_KEY_ROWS - 1) + 10; // タブ + gap + padding
+  const totalAvailable = height - topInset - bottomInset - HEADER_H - SUBHEADER_H - TOOLBAR_H;
 
-  // タイル幅制約
-  const maxTileByWidth = Math.floor((width - 32 - TILE_GAP * (WORD_LENGTH - 1)) / WORD_LENGTH);
+  // タイル幅制約（グリッドが2分割なので幅は半分）
+  const GRID_PADDING = 16;
+  const GRID_GAP = 8;
+  const halfWidth = (width - GRID_PADDING * 2 - GRID_GAP) / 2;
+  const maxTileByWidth = Math.floor((halfWidth - TILE_GAP * (WORD_LENGTH - 1) - 12) / WORD_LENGTH);
 
-  // 動的最適化：キー高さ（keySize）を小さくするほどタイルサイズが大きくなる
-  // 最小 keySize = 24px、最大 = 52px
   let bestTileSize = 0;
-  let bestKeySize = 24;
-  for (let ks = 24; ks <= 60; ks++) {
-    const kbH = KB_FIXED_H + ks * KB_KEY_ROWS;
+  let bestKeySize = 20;
+  for (let ks = 20; ks <= 50; ks++) {
+    const kbH = KB_FIXED_H + ks * KB_KEY_ROWS * 2;
     const gridAvailH = totalAvailable - kbH;
-    if (gridAvailH < 80) break;
+    if (gridAvailH < 60) break;
     const maxTileByH = Math.floor((gridAvailH - TILE_GAP * (MAX_TRIES - 1)) / MAX_TRIES);
-    const ts = Math.min(maxTileByWidth, maxTileByH, 52);
+    const ts = Math.min(maxTileByWidth, maxTileByH, 40);
     if (ts > bestTileSize) {
       bestTileSize = ts;
       bestKeySize = ks;
     }
   }
 
-  const tileSize = Math.max(bestTileSize, 12);
+  const tileSize = Math.max(bestTileSize, 10);
   const keySize = bestKeySize;
-  const kbTotalH = KB_FIXED_H + keySize * KB_KEY_ROWS;
-
-  // 実際のグリッド高さ
   const actualGridH = tileSize * MAX_TRIES + TILE_GAP * (MAX_TRIES - 1);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: topInset }]}>
+
       {/* ヘッダー */}
-      <View style={[styles.header, { borderBottomColor: colors.border, height: HEADER_HEIGHT }]}>
-        <Pressable
-          onPress={() => setSettingsVisible(true)}
-          style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.6 : 1 }]}
-        >
-          <IconSymbol name="gearshape.fill" size={22} color={colors.muted} />
-        </Pressable>
+      <View style={[styles.header, { height: HEADER_H, borderBottomColor: colors.border }]}>
+        <View style={styles.headerLeft}>
+          <Pressable style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.6 : 1 }]}>
+            <Text style={[styles.headerIcon, { color: colors.foreground }]}>?</Text>
+          </Pressable>
+          <Pressable style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.6 : 1 }]}>
+            <Text style={[styles.headerIcon, { color: colors.foreground }]}>✏</Text>
+          </Pressable>
+        </View>
 
         <Text style={[styles.title, { color: colors.foreground }]}>ことのはたんご</Text>
 
-        <Pressable
-          onPress={handleHeaderShare}
-          style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.6 : 1 }]}
-        >
-          <IconSymbol name="square.and.arrow.up" size={22} color={colors.muted} />
-        </Pressable>
+        <View style={styles.headerRight}>
+          <Pressable style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.6 : 1 }]}>
+            <IconSymbol name="chart.bar.fill" size={20} color={colors.foreground} />
+          </Pressable>
+          <Pressable
+            onPress={() => setSettingsVisible(true)}
+            style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.6 : 1 }]}
+          >
+            <IconSymbol name="gearshape.fill" size={20} color={colors.foreground} />
+          </Pressable>
+        </View>
       </View>
 
-      {/* シード表示 */}
-      <View style={[styles.seedRow, { height: SEED_ROW_HEIGHT }]}>
-        <Text style={[styles.seedLabel, { color: colors.muted }]}>
-          問題 #{state.seed}
+      {/* サブヘッダー：残り候補数・回数・タイマー */}
+      <View style={[styles.subHeader, { height: SUBHEADER_H, backgroundColor: colors.gridBg }]}>
+        <Text style={[styles.subHeaderText, { color: colors.foreground }]}>
+          残り候補数：—
         </Text>
+        <Text style={[styles.subHeaderText, { color: colors.foreground }]}>
+          第{Math.floor((Date.now() - new Date('2024-01-01').getTime()) / 86400000) + 1}回
+        </Text>
+        <CountdownTimer />
       </View>
 
-      {/* グリッド */}
-      <View style={[styles.gridArea, { height: actualGridH }]}>
+      {/* グリッドエリア */}
+      <View style={[styles.gridArea, { height: actualGridH + 12 }]}>
         <GameGrid tileSize={tileSize} tileGap={TILE_GAP} />
       </View>
 
       {/* キーボード */}
-      <View style={[
-        styles.keyboardArea,
-        {
-          borderTopColor: colors.border,
-        }
-      ]}>
+      <View style={[styles.keyboardArea, { borderTopColor: colors.border }]}>
         <KatakanaKeyboard keySize={keySize} keyGap={KEY_GAP} />
       </View>
+
+      {/* 下部ツールバー */}
+      <BottomToolbar />
 
       {/* モーダル */}
       <ResultModal />
@@ -204,7 +273,7 @@ function GameScreen() {
 }
 
 // ============================================================
-// エクスポート（GameProviderでラップ）
+// エクスポート
 // ============================================================
 
 export default function HomeScreen() {
@@ -221,47 +290,68 @@ export default function HomeScreen() {
 // ============================================================
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
+    paddingHorizontal: 12,
+    borderBottomWidth: 0.5,
   },
+  headerLeft: { flexDirection: "row", alignItems: "center", width: 72 },
+  headerRight: { flexDirection: "row", alignItems: "center", width: 72, justifyContent: "flex-end" },
+  headerBtn: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerIcon: { fontSize: 18, fontWeight: "600" },
   title: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "800",
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
     flex: 1,
     textAlign: "center",
   },
-  headerBtn: {
-    width: 36,
-    height: 36,
+  subHeader: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 10,
   },
-  seedRow: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  seedLabel: {
-    fontSize: 11,
-    letterSpacing: 0.5,
-  },
+  subHeaderText: { fontSize: 10, fontWeight: "500" },
+  timerText: { fontSize: 10, fontWeight: "600" },
   gridArea: {
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 8,
   },
   keyboardArea: {
-    paddingHorizontal: 12,
-    paddingTop: 6,
-    borderTopWidth: 1,
+    paddingHorizontal: 8,
+    paddingTop: 4,
+    borderTopWidth: 0.5,
   },
+  toolbar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderTopWidth: 0.5,
+  },
+  toolBtn: {
+    flex: 1,
+    marginHorizontal: 2,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 40,
+  },
+  toolIcon: { fontSize: 14 },
+  toolLabel: { fontSize: 9, fontWeight: "500", textAlign: "center", marginTop: 2 },
   toast: {
     position: "absolute",
     top: 80,
@@ -271,8 +361,5 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     zIndex: 999,
   },
-  toastText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
+  toastText: { fontSize: 14, fontWeight: "600" },
 });
