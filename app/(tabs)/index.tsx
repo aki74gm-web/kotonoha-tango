@@ -193,15 +193,11 @@ function GameScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
-  const { state, newGame, startGame } = useGame();
+  const { state, newGame, startGame, startedAt, timerStopped } = useGame();
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
   const shareUrl = useShareUrl(state.seed);
-
-  // 経過時間管理
-  const [startedAt, setStartedAt] = useState<number | null>(null);
-  const timerStopped = state.status === "won" || state.status === "lost";
 
   // 結果モーダルのdismissed状態（盤面確認中はtrue）
   const [modalDismissed, setModalDismissed] = useState(false);
@@ -211,15 +207,13 @@ function GameScreen() {
   // スタートボタンを押したとき
   const handleStart = () => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setStartedAt(Date.now());
-    startGame();
+    startGame(); // startedAtはGameProvider内でDate.now()をセット
   };
 
   // 新しいゲームを開始するときはタイマーをリセット
   const handleNewGame = (seed?: string) => {
-    setStartedAt(null);
     setModalDismissed(false);
-    newGame(seed);
+    newGame(seed); // startedAtはGameProvider内でnullにリセット
   };
 
   const deepLinkSeed = useDeepLinkSeed();

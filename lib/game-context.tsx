@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useReducer,
+  useState,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
@@ -54,17 +55,27 @@ export interface GameState {
   revealRow: number | null;
 }
 
+/** 永続化する状態のサブセット */
+interface PersistedState {
+  seed: string;
+  grid: Tile[][];
+  currentRow: number;
+  status: GameStatus;
+  startedAt: number | null; // タイマー開始時刻（ms）
+}
+
 type GameAction =
-  | { type: "START_GAME" }             // スタートボタンを押してゲーム開始
+  | { type: "START_GAME" }
   | { type: "INPUT_CHAR"; char: string }
-  | { type: "DELETE_CHAR" }           // カーソル左の文字を削除（バックスペース）
-  | { type: "DELETE_CHAR_RIGHT" }     // カーソル右の文字を削除（デリート）
+  | { type: "DELETE_CHAR" }
+  | { type: "DELETE_CHAR_RIGHT" }
   | { type: "MOVE_CURSOR_LEFT" }
   | { type: "MOVE_CURSOR_RIGHT" }
   | { type: "SUBMIT_ROW" }
   | { type: "CLEAR_SHAKE" }
   | { type: "CLEAR_REVEAL" }
-  | { type: "NEW_GAME"; seed?: string };
+  | { type: "NEW_GAME"; seed?: string }
+  | { type: "RESTORE_STATE"; persisted: PersistedState };
 
 // ============================================================
 // Reducer
@@ -80,7 +91,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case "INPUT_CHAR": {
       if (state.status !== "playing") return state;
       if (state.currentInput.length >= WORD_LENGTH) return state;
-      // カーソル位置に文字を挿入
       const before = state.currentInput.slice(0, state.cursorPos);
       const after = state.currentInput.slice(state.cursorPos);
       const newInput = before + action.char + after;
@@ -92,7 +102,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case "DELETE_CHAR": {
-      // バックスペース：カーソル左の文字を削除
       if (state.status !== "playing") return state;
       if (state.cursorPos === 0) return state;
       const newInput =
@@ -106,7 +115,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case "DELETE_CHAR_RIGHT": {
-      // デリート：カーソル右の文字を削除
       if (state.status !== "playing") return state;
       if (state.cursorPos >= state.currentInput.length) return state;
       const newInput =
@@ -135,7 +143,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       }
 
       const statuses = evaluateGuess(state.currentInput, state.answer);
-      // 決定時に入力バッファをグリッドに反映
       const newGrid = state.grid.map((row, ri) =>
         ri === state.currentRow
           ? row.map((tile, ci) => ({
@@ -169,6 +176,21 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case "NEW_GAME":
       return createInitialState(action.seed);
 
+    case "RESTORE_STATE": {
+      const { persisted } = action;
+      return {
+        answer: getWordFromSeed(persisted.seed),
+        seed: persisted.seed,
+        grid: persisted.grid,
+        currentRow: persisted.currentRow,
+        currentInput: "",
+        cursorPos: 0,
+        status: persisted.status,
+        invalidShake: false,
+        revealRow: null,
+      };
+    }
+
     default:
       return state;
   }
@@ -183,7 +205,7 @@ function createInitialState(seed?: string): GameState {
     currentRow: 0,
     currentInput: "",
     cursorPos: 0,
-    status: "waiting",   // 起動時はスタート前
+    status: "waiting",
     invalidShake: false,
     revealRow: null,
   };
@@ -205,23 +227,67 @@ interface GameContextValue {
   submitRow: () => void;
   startGame: () => void;
   newGame: (seed?: string) => void;
+  /** タイマー開始時刻（ms）。startGame時にセットされ、永続化される */
+  startedAt: number | null;
+  /** タイマーを停止するか（won/lost時） */
+  timerStopped: boolean;
 }
 
 const GameContext = createContext<GameContextValue | null>(null);
 
-const STORAGE_KEY = "kotonoha_game_state";
+const STORAGE_KEY = "kotonoha_game_state_v2";
 
 export function GameProvider({ children, initialSeed }: { children: React.ReactNode; initialSeed?: string }) {
   const [state, dispatch] = useReducer(gameReducer, undefined, () =>
     createInitialState(initialSeed)
   );
+  const [hydrated, setHydrated] = useState(false);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
 
-  // ゲーム状態の永続化
+  // ── 起動時に保存済み状態を復元 ──
   useEffect(() => {
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ seed: state.seed })).catch(() => {});
-  }, [state.seed]);
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((raw) => {
+        if (raw) {
+          try {
+            const persisted: PersistedState = JSON.parse(raw);
+            // 基本的なバリデーション
+            if (
+              persisted.seed &&
+              Array.isArray(persisted.grid) &&
+              typeof persisted.currentRow === "number" &&
+              persisted.status
+            ) {
+              dispatch({ type: "RESTORE_STATE", persisted });
+              if (persisted.startedAt) {
+                setStartedAt(persisted.startedAt);
+              }
+            }
+          } catch {
+            // 破損データは無視して新規ゲーム
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => setHydrated(true));
+  }, []);
+
+  // ── 状態変化時に永続化 ──
+  useEffect(() => {
+    if (!hydrated) return;
+    // 一時的なUI状態（invalidShake, revealRow, currentInput）は保存しない
+    const persisted: PersistedState = {
+      seed: state.seed,
+      grid: state.grid,
+      currentRow: state.currentRow,
+      status: state.status,
+      startedAt,
+    };
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(persisted)).catch(() => {});
+  }, [state.seed, state.grid, state.currentRow, state.status, startedAt, hydrated]);
 
   const keyStatuses = computeKeyStatuses(state.grid, state.currentRow);
+  const timerStopped = state.status === "won" || state.status === "lost";
 
   const inputChar = useCallback((char: string) => {
     if (Platform.OS !== "web") {
@@ -251,12 +317,18 @@ export function GameProvider({ children, initialSeed }: { children: React.ReactN
   }, []);
 
   const startGame = useCallback(() => {
+    const now = Date.now();
+    setStartedAt(now);
     dispatch({ type: "START_GAME" });
   }, []);
 
   const newGame = useCallback((seed?: string) => {
+    setStartedAt(null);
     dispatch({ type: "NEW_GAME", seed });
   }, []);
+
+  // hydration完了まで子要素をレンダリングしない（チラつき防止）
+  if (!hydrated) return null;
 
   return (
     <GameContext.Provider value={{
@@ -271,6 +343,8 @@ export function GameProvider({ children, initialSeed }: { children: React.ReactN
       submitRow,
       startGame,
       newGame,
+      startedAt,
+      timerStopped,
     }}>
       {children}
     </GameContext.Provider>
