@@ -90,14 +90,14 @@ function CountdownTimer() {
 
 function BottomToolbar() {
   const colors = useColors();
-  const { state, dispatch } = useGame();
+  const { submitRow, moveCursorLeft, moveCursorRight, deleteChar, deleteCharRight } = useGame();
 
   const tools = [
-    { label: "左に移動", icon: "◀" },
-    { label: "入力\n固定", icon: "🔒" },
-    { label: "右に移動", icon: "▶" },
-    { label: "左を削除", icon: "⬅" },
-    { label: "右を削除", icon: "➡" },
+    { label: "左に移動", icon: "◀", onPress: moveCursorLeft },
+    { label: "入力\n固定", icon: "🔒", onPress: submitRow },
+    { label: "右に移動", icon: "▶", onPress: moveCursorRight },
+    { label: "左を削除", icon: "⬅", onPress: deleteChar },
+    { label: "右を削除", icon: "➡", onPress: deleteCharRight },
   ];
 
   return (
@@ -105,6 +105,7 @@ function BottomToolbar() {
       {tools.map((tool, i) => (
         <Pressable
           key={i}
+          onPress={tool.onPress}
           style={({ pressed }) => [
             styles.toolBtn,
             {

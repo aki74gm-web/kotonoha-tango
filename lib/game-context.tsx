@@ -44,15 +44,21 @@ export interface GameState {
   seed: string;
   grid: Tile[][];
   currentRow: number;
+  /** 入力欄バッファ（キーボードで入力中の文字列、まだ解答欄には反映されない） */
   currentInput: string;
+  /** 入力欄内のカーソル位置（0〜currentInput.length） */
+  cursorPos: number;
   status: GameStatus;
   invalidShake: boolean;
-  revealRow: number | null; // アニメーション用：現在リビール中の行
+  revealRow: number | null;
 }
 
 type GameAction =
   | { type: "INPUT_CHAR"; char: string }
-  | { type: "DELETE_CHAR" }
+  | { type: "DELETE_CHAR" }           // カーソル左の文字を削除（バックスペース）
+  | { type: "DELETE_CHAR_RIGHT" }     // カーソル右の文字を削除（デリート）
+  | { type: "MOVE_CURSOR_LEFT" }
+  | { type: "MOVE_CURSOR_RIGHT" }
   | { type: "SUBMIT_ROW" }
   | { type: "CLEAR_SHAKE" }
   | { type: "CLEAR_REVEAL" }
@@ -67,31 +73,54 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case "INPUT_CHAR": {
       if (state.status !== "playing") return state;
       if (state.currentInput.length >= WORD_LENGTH) return state;
-      const newInput = state.currentInput + action.char;
-      const newGrid = state.grid.map((row, ri) =>
-        ri === state.currentRow
-          ? row.map((tile, ci) => ({
-              char: ci < newInput.length ? newInput[ci] : "",
-              status: ci < newInput.length ? "filled" : "empty",
-            } as Tile))
-          : row
-      );
-      return { ...state, currentInput: newInput, grid: newGrid };
+      // カーソル位置に文字を挿入
+      const before = state.currentInput.slice(0, state.cursorPos);
+      const after = state.currentInput.slice(state.cursorPos);
+      const newInput = before + action.char + after;
+      return {
+        ...state,
+        currentInput: newInput,
+        cursorPos: state.cursorPos + 1,
+        // グリッドは更新しない（入力欄バッファのみ）
+      };
     }
 
     case "DELETE_CHAR": {
+      // バックスペース：カーソル左の文字を削除
       if (state.status !== "playing") return state;
-      if (state.currentInput.length === 0) return state;
-      const newInput = state.currentInput.slice(0, -1);
-      const newGrid = state.grid.map((row, ri) =>
-        ri === state.currentRow
-          ? row.map((tile, ci) => ({
-              char: ci < newInput.length ? newInput[ci] : "",
-              status: ci < newInput.length ? "filled" : "empty",
-            } as Tile))
-          : row
-      );
-      return { ...state, currentInput: newInput, grid: newGrid };
+      if (state.cursorPos === 0) return state;
+      const newInput =
+        state.currentInput.slice(0, state.cursorPos - 1) +
+        state.currentInput.slice(state.cursorPos);
+      return {
+        ...state,
+        currentInput: newInput,
+        cursorPos: state.cursorPos - 1,
+      };
+    }
+
+    case "DELETE_CHAR_RIGHT": {
+      // デリート：カーソル右の文字を削除
+      if (state.status !== "playing") return state;
+      if (state.cursorPos >= state.currentInput.length) return state;
+      const newInput =
+        state.currentInput.slice(0, state.cursorPos) +
+        state.currentInput.slice(state.cursorPos + 1);
+      return {
+        ...state,
+        currentInput: newInput,
+        // カーソル位置は変わらない
+      };
+    }
+
+    case "MOVE_CURSOR_LEFT": {
+      if (state.cursorPos === 0) return state;
+      return { ...state, cursorPos: state.cursorPos - 1 };
+    }
+
+    case "MOVE_CURSOR_RIGHT": {
+      if (state.cursorPos >= state.currentInput.length) return state;
+      return { ...state, cursorPos: state.cursorPos + 1 };
     }
 
     case "SUBMIT_ROW": {
@@ -101,6 +130,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       }
 
       const statuses = evaluateGuess(state.currentInput, state.answer);
+      // 決定時に入力バッファをグリッドに反映
       const newGrid = state.grid.map((row, ri) =>
         ri === state.currentRow
           ? row.map((tile, ci) => ({
@@ -119,6 +149,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         grid: newGrid,
         currentRow: nextRow,
         currentInput: "",
+        cursorPos: 0,
         status: isCorrect ? "won" : isLost ? "lost" : "playing",
         revealRow: state.currentRow,
       };
@@ -146,6 +177,7 @@ function createInitialState(seed?: string): GameState {
     grid: createEmptyGrid(),
     currentRow: 0,
     currentInput: "",
+    cursorPos: 0,
     status: "playing",
     invalidShake: false,
     revealRow: null,
@@ -162,6 +194,9 @@ interface GameContextValue {
   keyStatuses: Record<string, KeyStatus>;
   inputChar: (char: string) => void;
   deleteChar: () => void;
+  deleteCharRight: () => void;
+  moveCursorLeft: () => void;
+  moveCursorRight: () => void;
   submitRow: () => void;
   newGame: (seed?: string) => void;
 }
@@ -193,6 +228,18 @@ export function GameProvider({ children, initialSeed }: { children: React.ReactN
     dispatch({ type: "DELETE_CHAR" });
   }, []);
 
+  const deleteCharRight = useCallback(() => {
+    dispatch({ type: "DELETE_CHAR_RIGHT" });
+  }, []);
+
+  const moveCursorLeft = useCallback(() => {
+    dispatch({ type: "MOVE_CURSOR_LEFT" });
+  }, []);
+
+  const moveCursorRight = useCallback(() => {
+    dispatch({ type: "MOVE_CURSOR_RIGHT" });
+  }, []);
+
   const submitRow = useCallback(() => {
     dispatch({ type: "SUBMIT_ROW" });
   }, []);
@@ -202,7 +249,18 @@ export function GameProvider({ children, initialSeed }: { children: React.ReactN
   }, []);
 
   return (
-    <GameContext.Provider value={{ state, dispatch, keyStatuses, inputChar, deleteChar, submitRow, newGame }}>
+    <GameContext.Provider value={{
+      state,
+      dispatch,
+      keyStatuses,
+      inputChar,
+      deleteChar,
+      deleteCharRight,
+      moveCursorLeft,
+      moveCursorRight,
+      submitRow,
+      newGame,
+    }}>
       {children}
     </GameContext.Provider>
   );
