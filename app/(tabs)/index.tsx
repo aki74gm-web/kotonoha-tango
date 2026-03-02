@@ -109,6 +109,29 @@ function StartOverlay({ onStart }: { onStart: () => void }) {
 }
 
 // ============================================================
+// 盤面確認中の「結果を見る」ボタン
+// ============================================================
+
+function ViewResultButton({ onPress, won }: { onPress: () => void; won: boolean }) {
+  const colors = useColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.viewResultBtn,
+        {
+          backgroundColor: won ? colors.primary : colors.error,
+          opacity: pressed ? 0.85 : 1,
+          transform: [{ scale: pressed ? 0.97 : 1 }],
+        },
+      ]}
+    >
+      <Text style={styles.viewResultBtnText}>結果を見る</Text>
+    </Pressable>
+  );
+}
+
+// ============================================================
 // 不正解終了時の答え表示バナー
 // ============================================================
 
@@ -180,6 +203,11 @@ function GameScreen() {
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const timerStopped = state.status === "won" || state.status === "lost";
 
+  // 結果モーダルのdismissed状態（盤面確認中はtrue）
+  const [modalDismissed, setModalDismissed] = useState(false);
+  const isFinished = state.status === "won" || state.status === "lost";
+  const showViewResultBtn = isFinished && modalDismissed;
+
   // スタートボタンを押したとき
   const handleStart = () => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -190,6 +218,7 @@ function GameScreen() {
   // 新しいゲームを開始するときはタイマーをリセット
   const handleNewGame = (seed?: string) => {
     setStartedAt(null);
+    setModalDismissed(false);
     newGame(seed);
   };
 
@@ -251,6 +280,7 @@ function GameScreen() {
 
   const isWaiting = state.status === "waiting";
   const isLost = state.status === "lost";
+  const isWon = state.status === "won";
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: topInset }]}>
@@ -299,6 +329,10 @@ function GameScreen() {
         {isLost && <AnswerBanner answer={state.answer} />}
         {/* スタート前：スタートオーバーレイ */}
         {isWaiting && <StartOverlay onStart={handleStart} />}
+        {/* 盤面確認中：「結果を見る」ボタン */}
+        {showViewResultBtn && (
+          <ViewResultButton onPress={() => setModalDismissed(false)} won={isWon} />
+        )}
       </View>
 
       {/* キーボード（waiting中は薄く表示） */}
@@ -310,7 +344,11 @@ function GameScreen() {
       <BottomToolbar />
 
       {/* モーダル */}
-      <ResultModal />
+      <ResultModal
+        dismissed={modalDismissed}
+        onDismiss={() => setModalDismissed(true)}
+        onRestore={() => setModalDismissed(false)}
+      />
       <SettingsModal visible={settingsVisible} onClose={() => setSettingsVisible(false)} />
 
       {/* トースト */}
@@ -443,6 +481,20 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     letterSpacing: 1,
+  },
+  // 結果を見るボタン
+  viewResultBtn: {
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 24,
+    marginTop: 10,
+    alignSelf: "center",
+  },
+  viewResultBtnText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: 0.5,
   },
   // 答えバナー
   answerBanner: {

@@ -98,21 +98,21 @@ function CopyButton({
 // モーダル本体
 // ============================================================
 
-export function ResultModal() {
+interface ResultModalProps {
+  dismissed: boolean;
+  onDismiss: () => void;
+  onRestore: () => void;
+}
+
+export function ResultModal({ dismissed, onDismiss, onRestore }: ResultModalProps) {
   const { state, newGame, dispatch } = useGame();
   const colors = useColors();
   const slideAnim = useRef(new Animated.Value(300)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const shareUrl = useShareUrl(state.seed);
-  const [dismissed, setDismissed] = useState(false);
 
   const isFinished = state.status === "won" || state.status === "lost";
   const isVisible = isFinished && !dismissed;
-
-  // ゲーム状態が変わったら（新しいゲーム開始）dismissedをリセット
-  useEffect(() => {
-    setDismissed(false);
-  }, [state.seed]);
 
   useEffect(() => {
     if (isVisible) {
@@ -158,13 +158,12 @@ export function ResultModal() {
 
   const handleNewGame = () => {
     // 新しいゲームはwaitingに戻る（スタートボタンを再度押す必要がある）
-    setDismissed(false);
     newGame();
   };
 
   const handleViewBoard = () => {
     // モーダルを閉じて盤面を確認できるようにする
-    setDismissed(true);
+    onDismiss();
   };
 
   if (!isVisible) return null;
