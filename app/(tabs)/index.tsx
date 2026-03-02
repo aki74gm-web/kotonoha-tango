@@ -134,7 +134,6 @@ function GameScreen() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
-  const [dynTileSize, setDynTileSize] = useState(0);
   const shareUrl = useShareUrl(state.seed);
 
   const deepLinkSeed = useDeepLinkSeed();
@@ -194,11 +193,11 @@ function GameScreen() {
   const halfWidth = (width - GRID_PADDING * 2 - 12 - GRID_GAP) / 2;
   const maxTileByWidth = Math.floor((halfWidth - TILE_GAP * (WORD_LENGTH - 1)) / WORD_LENGTH);
 
-  // タイルサイズは幅制約で固定、余白をキーサイズに配分
+  // タイルサイズは幅制約で固定
   const tileSize = Math.max(maxTileByWidth, 10);
-  const actualGridH = tileSize * HALF_TRIES + TILE_GAP * (HALF_TRIES - 1);
-  const remainForKb = totalAvailable - actualGridH;
-  const keySize = Math.max(Math.floor((remainForKb - KB_FIXED_H) / (KB_KEY_ROWS * 2)), 18);
+  // グリッド・キーボードを画面の50:50に配分する
+  const halfAvail = Math.floor(totalAvailable / 2);
+  const keySize = Math.max(Math.floor((halfAvail - KB_FIXED_H) / (KB_KEY_ROWS * 2)), 18);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: topInset }]}>
@@ -241,20 +240,8 @@ function GameScreen() {
       </View>
 
       {/* グリッドエリア */}
-      <View
-        style={[styles.gridArea, { flex: 1 }]}
-        onLayout={(e) => {
-          const { width: gw, height: gh } = e.nativeEvent.layout;
-          const HALF_T = MAX_TRIES / 2;
-          // gridArea内のグリッドwrapper: padding=6, gap=8
-          const innerH = gh - 12; // padding top+bottom
-          const halfW = (gw - 12 - 8) / 2; // padding*2 + gap
-          const byH = Math.floor((innerH - TILE_GAP * (HALF_T - 1)) / HALF_T);
-          const byW = Math.floor((halfW - TILE_GAP * (WORD_LENGTH - 1)) / WORD_LENGTH);
-          setDynTileSize(Math.max(Math.min(byH, byW, 60), 10));
-        }}
-      >
-        <GameGrid tileSize={dynTileSize || tileSize} tileGap={TILE_GAP} />
+      <View style={styles.gridArea}>
+        <GameGrid tileSize={tileSize} tileGap={TILE_GAP} />
       </View>
 
       {/* キーボード */}
@@ -327,15 +314,18 @@ const styles = StyleSheet.create({
   timerText: { fontSize: 10, fontWeight: "600" },
   gridArea: {
     flex: 1,
+    flexDirection: "column",
     justifyContent: "center",
-    alignItems: "stretch",
+    alignItems: "center",
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
   keyboardArea: {
+    flex: 1,
     paddingHorizontal: 8,
     paddingTop: 4,
     borderTopWidth: 0.5,
+    justifyContent: "flex-start",
   },
   toolbar: {
     flexDirection: "row",

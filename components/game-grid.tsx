@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from "react";
-import { Animated, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 import { useGame, type Tile, type TileStatus, WORD_LENGTH, MAX_TRIES } from "@/lib/game-context";
 import { useColors } from "@/hooks/use-colors";
@@ -187,12 +187,28 @@ export interface GameGridProps {
   tileGap: number;
 }
 
-export function GameGrid({ tileSize, tileGap }: GameGridProps) {
+export function GameGrid({ tileSize: tileSizeProp, tileGap }: GameGridProps) {
   const { state, dispatch } = useGame();
   const colors = useColors();
-  const fontSize = Math.max(Math.floor(tileSize * 0.38), 10);
+  const { width } = useWindowDimensions();
+  const [containerH, setContainerH] = useState(0);
 
   const HALF = MAX_TRIES / 2; // 5
+  const GRID_PADDING = 6;
+  const GRID_GAP = 8;
+
+  // 幅からタイルサイズを計算
+  const halfWidth = (width - GRID_PADDING * 2 - 12 - GRID_GAP) / 2;
+  const tileSizeByWidth = Math.max(Math.floor((halfWidth - tileGap * (WORD_LENGTH - 1)) / WORD_LENGTH), 10);
+
+  // 高さからタイルサイズを計算
+  const tileSizeByHeight = containerH > 0
+    ? Math.max(Math.floor((containerH - GRID_PADDING * 2 - tileGap * (HALF - 1)) / HALF), 10)
+    : tileSizeProp;
+
+  // 小さい方を採用（はみ出さないように）
+  const tileSize = Math.min(tileSizeByWidth, tileSizeByHeight);
+  const fontSize = Math.max(Math.floor(tileSize * 0.38), 10);
 
   useEffect(() => {
     if (state.invalidShake) {
@@ -210,40 +226,45 @@ export function GameGrid({ tileSize, tileGap }: GameGridProps) {
 
   return (
     <View
-      style={[styles.gridWrapper, { gap: 8, backgroundColor: colors.gridBg, borderRadius: 8, padding: 6 }]}
+      style={styles.outerContainer}
+      onLayout={(e) => setContainerH(e.nativeEvent.layout.height)}
     >
-      {/* 左グリッド：四角（1〜5答目） */}
-      <View style={[styles.grid, { gap: tileGap }]}>
-        {state.grid.slice(0, HALF).map((row, ri) => (
-          <RowView
-            key={ri}
-            tiles={row}
-            rowIndex={ri}
-            isShaking={state.invalidShake && ri === state.currentRow}
-            isRevealing={state.revealRow === ri}
-            tileSize={tileSize}
-            tileGap={tileGap}
-            fontSize={fontSize}
-            shape="square"
-          />
-        ))}
-      </View>
+      <View
+        style={[styles.gridWrapper, { gap: GRID_GAP, backgroundColor: colors.gridBg, borderRadius: 8, padding: GRID_PADDING, width: "100%" }]}
+      >
+        {/* 左グリッド：四角（1〜5答目） */}
+        <View style={[styles.grid, { gap: tileGap }]}>
+          {state.grid.slice(0, HALF).map((row, ri) => (
+            <RowView
+              key={ri}
+              tiles={row}
+              rowIndex={ri}
+              isShaking={state.invalidShake && ri === state.currentRow}
+              isRevealing={state.revealRow === ri}
+              tileSize={tileSize}
+              tileGap={tileGap}
+              fontSize={fontSize}
+              shape="square"
+            />
+          ))}
+        </View>
 
-      {/* 右グリッド：丸（6〜10答目） */}
-      <View style={[styles.grid, { gap: tileGap }]}>
-        {state.grid.slice(HALF, MAX_TRIES).map((row, ri) => (
-          <RowView
-            key={ri + HALF}
-            tiles={row}
-            rowIndex={ri + HALF}
-            isShaking={state.invalidShake && (ri + HALF) === state.currentRow}
-            isRevealing={state.revealRow === (ri + HALF)}
-            tileSize={tileSize}
-            tileGap={tileGap}
-            fontSize={fontSize}
-            shape="circle"
-          />
-        ))}
+        {/* 右グリッド：丸（6〜10答目） */}
+        <View style={[styles.grid, { gap: tileGap }]}>
+          {state.grid.slice(HALF, MAX_TRIES).map((row, ri) => (
+            <RowView
+              key={ri + HALF}
+              tiles={row}
+              rowIndex={ri + HALF}
+              isShaking={state.invalidShake && (ri + HALF) === state.currentRow}
+              isRevealing={state.revealRow === (ri + HALF)}
+              tileSize={tileSize}
+              tileGap={tileGap}
+              fontSize={fontSize}
+              shape="circle"
+            />
+          ))}
+        </View>
       </View>
     </View>
   );
@@ -254,9 +275,16 @@ export function GameGrid({ tileSize, tileGap }: GameGridProps) {
 // ============================================================
 
 const styles = StyleSheet.create({
+  outerContainer: {
+    flex: 1,
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   gridWrapper: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
+    alignSelf: "center",
   },
   grid: {
     alignItems: "center",

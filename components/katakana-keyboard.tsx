@@ -30,7 +30,7 @@ const ROWS_DAKUTEN: string[][] = [
 ];
 
 // ============================================================
-// 単一キー
+// 単一キー（flex:1ベース）
 // ============================================================
 
 interface KeyProps {
@@ -38,12 +38,11 @@ interface KeyProps {
   status: KeyStatus;
   onPress: (char: string) => void;
   keyW: number;
-  keyH: number;
   fontSize: number;
   isSpecial?: boolean;
 }
 
-function Key({ char, status, onPress, keyW, keyH, fontSize, isSpecial }: KeyProps) {
+function Key({ char, status, onPress, keyW, fontSize, isSpecial }: KeyProps) {
   const colors = useColors();
 
   // 空欄（点線枠）
@@ -54,7 +53,6 @@ function Key({ char, status, onPress, keyW, keyH, fontSize, isSpecial }: KeyProp
           styles.key,
           {
             width: keyW,
-            height: keyH,
             backgroundColor: "transparent",
             borderColor: colors.border,
             borderWidth: 1,
@@ -74,7 +72,6 @@ function Key({ char, status, onPress, keyW, keyH, fontSize, isSpecial }: KeyProp
           styles.key,
           {
             width: keyW,
-            height: keyH,
             backgroundColor: colors.surface,
             borderColor: colors.border,
             borderWidth: 1,
@@ -108,7 +105,6 @@ function Key({ char, status, onPress, keyW, keyH, fontSize, isSpecial }: KeyProp
         styles.key,
         {
           width: keyW,
-          height: keyH,
           backgroundColor: bgColor,
           borderColor: isDashed ? colors.border : bgColor,
           borderWidth: 1,
@@ -134,7 +130,7 @@ export interface KatakanaKeyboardProps {
   keyGap: number;
 }
 
-export function KatakanaKeyboard({ keySize, keyGap }: KatakanaKeyboardProps) {
+export function KatakanaKeyboard({ keySize: _keySizeProp, keyGap }: KatakanaKeyboardProps) {
   const { inputChar, deleteChar, submitRow, state, keyStatuses } = useGame();
   const colors = useColors();
   const { width } = useWindowDimensions();
@@ -143,8 +139,7 @@ export function KatakanaKeyboard({ keySize, keyGap }: KatakanaKeyboardProps) {
   const PADDING_H = 16;
   const availW = width - PADDING_H - keyGap * (NUM_COLS - 1);
   const keyW = Math.max(Math.floor(availW / NUM_COLS), 18);
-  const keyH = keySize;
-  const fontSize = Math.max(Math.floor(Math.min(keyW, keyH) * 0.48), 9);
+  const fontSize = Math.max(Math.floor(keyW * 0.48), 9);
 
   const isInputFull = state.currentInput.length === 5;
   const canSubmit = isInputFull && state.status === "playing";
@@ -170,7 +165,6 @@ export function KatakanaKeyboard({ keySize, keyGap }: KatakanaKeyboardProps) {
           status={(keyStatuses[char] as KeyStatus) ?? "unused"}
           onPress={handleKeyPress}
           keyW={keyW}
-          keyH={keyH}
           fontSize={fontSize}
           isSpecial={SPECIAL_KEYS.has(char)}
         />
@@ -181,7 +175,7 @@ export function KatakanaKeyboard({ keySize, keyGap }: KatakanaKeyboardProps) {
   return (
     <View style={styles.container}>
       {/* 上部：キーボード入力用ボタン + 決定ボタン */}
-      <View style={[styles.topRow, { marginBottom: keyGap + 2 }]}>
+      <View style={styles.topRow}>
         <Pressable
           style={({ pressed }) => [
             styles.kbInputBtn,
@@ -212,13 +206,16 @@ export function KatakanaKeyboard({ keySize, keyGap }: KatakanaKeyboardProps) {
         </Pressable>
       </View>
 
-      {/* 五十音（上半分） */}
+      {/* 五十音（上半分）: flex:1で均等配分 */}
       <View style={[styles.section, { gap: keyGap }]}>
         {ROWS_BASIC.map((row, ri) => renderRow(row, ri))}
       </View>
 
-      {/* 濁点・小文字（下半分） */}
-      <View style={[styles.section, { gap: keyGap, marginTop: keyGap + 2 }]}>
+      {/* セクション間の区切り */}
+      <View style={{ height: keyGap + 2 }} />
+
+      {/* 濁点・小文字（下半分）: flex:1で均等配分 */}
+      <View style={[styles.section, { gap: keyGap }]}>
         {ROWS_DAKUTEN.map((row, ri) => renderRow(row, ri + 10))}
       </View>
     </View>
@@ -232,10 +229,14 @@ export function KatakanaKeyboard({ keySize, keyGap }: KatakanaKeyboardProps) {
 const styles = StyleSheet.create({
   container: {
     width: "100%",
+    flex: 1,
+    paddingBottom: 4,
   },
   topRow: {
     flexDirection: "row",
     alignItems: "center",
+    height: 34,
+    marginBottom: 4,
   },
   kbInputBtn: {
     height: 34,
@@ -262,13 +263,16 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   section: {
+    flex: 1,
     flexDirection: "column",
   },
   row: {
+    flex: 1,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "stretch",
   },
   key: {
+    flex: 1,
     borderRadius: 5,
     alignItems: "center",
     justifyContent: "center",
