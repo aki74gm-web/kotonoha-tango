@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Animated, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 import { useGame, type KeyStatus } from "@/lib/game-context";
@@ -7,8 +7,6 @@ import { WORD_LENGTH } from "@/lib/game-logic";
 
 // ============================================================
 // キーボードレイアウト定義
-// 各行は左→右の順（右端がア行）
-// "" = 空欄（点線枠）
 // ============================================================
 
 // 上半分：五十音
@@ -51,7 +49,7 @@ function BlinkingCursor({ size, color }: { size: number; color: string }) {
     <Animated.View
       style={{
         width: 2,
-        height: size * 0.7,
+        height: size * 0.65,
         backgroundColor: color,
         opacity,
         borderRadius: 1,
@@ -61,20 +59,60 @@ function BlinkingCursor({ size, color }: { size: number; color: string }) {
 }
 
 // ============================================================
-// 入力欄（カーソル付き5マスセル）
+// シェイクアニメーション付き入力欄
 // ============================================================
 
-function InputBar({ cellSize, colors }: { cellSize: number; colors: ReturnType<typeof useColors> }) {
+function InputBar({
+  cellSize,
+  colors,
+  shakeSignal,
+}: {
+  cellSize: number;
+  colors: ReturnType<typeof useColors>;
+  shakeSignal: number; // 値が変わるたびにシェイク発火
+}) {
   const { state } = useGame();
   const { currentInput, cursorPos } = state;
   const fontSize = Math.max(Math.floor(cellSize * 0.5), 12);
 
+  // シェイクアニメーション
+  const shakeX = useRef(new Animated.Value(0)).current;
+  const prevSignal = useRef(0);
+
+  useEffect(() => {
+    if (shakeSignal === prevSignal.current) return;
+    prevSignal.current = shakeSignal;
+    Animated.sequence([
+      Animated.timing(shakeX, { toValue: -8, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeX, { toValue:  8, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeX, { toValue: -6, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeX, { toValue:  6, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeX, { toValue: -3, duration: 40, useNativeDriver: true }),
+      Animated.timing(shakeX, { toValue:  0, duration: 40, useNativeDriver: true }),
+    ]).start();
+  }, [shakeSignal]);
+
   return (
-    <View style={[styles.inputBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <Animated.View
+      style={[
+        styles.inputBar,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          transform: [{ translateX: shakeX }],
+        },
+      ]}
+    >
       {Array.from({ length: WORD_LENGTH }).map((_, i) => {
         const char = currentInput[i] ?? "";
         const isCursorHere = i === cursorPos;
-        const isAfterInput = i >= currentInput.length;
+
+        // カーソルセルの枠線色：プライマリカラーで強調
+        const borderColor = isCursorHere ? colors.primary : colors.border;
+        const borderWidth = isCursorHere ? 2.5 : 1;
+        const bgColor = isCursorHere
+          ? (colors.tileFilled ?? colors.surface)
+          : (colors.tileEmpty ?? colors.background);
 
         return (
           <View
@@ -84,23 +122,24 @@ function InputBar({ cellSize, colors }: { cellSize: number; colors: ReturnType<t
               {
                 width: cellSize,
                 height: cellSize,
-                borderColor: isCursorHere ? colors.foreground : colors.border,
-                borderWidth: isCursorHere ? 2 : 1,
-                backgroundColor: isCursorHere ? colors.tileFilled : colors.tileEmpty,
+                borderColor,
+                borderWidth,
+                backgroundColor: bgColor,
               },
             ]}
           >
             {isCursorHere && !char ? (
-              <BlinkingCursor size={cellSize} color={colors.foreground} />
+              // 空のカーソルセル：点滅カーソルのみ
+              <BlinkingCursor size={cellSize} color={colors.primary} />
             ) : (
               <Text style={[styles.inputCellText, { fontSize, color: colors.foreground }]}>
                 {char}
               </Text>
             )}
-            {/* カーソルが文字の後ろにある場合（文字あり＋カーソル） */}
+            {/* 文字あり＋カーソル：下線で示す */}
             {isCursorHere && char ? (
               <View style={styles.cursorUnderline}>
-                <View style={{ width: "80%", height: 2, backgroundColor: colors.foreground, borderRadius: 1 }} />
+                <View style={{ width: "75%", height: 2.5, backgroundColor: colors.primary, borderRadius: 1 }} />
               </View>
             ) : null}
           </View>
@@ -109,10 +148,10 @@ function InputBar({ cellSize, colors }: { cellSize: number; colors: ReturnType<t
       {/* カーソルが末尾（全文字入力済みの後ろ）の場合 */}
       {cursorPos === WORD_LENGTH && (
         <View style={[styles.inputCell, { width: 0, height: cellSize, overflow: "visible" }]}>
-          <BlinkingCursor size={cellSize} color={colors.foreground} />
+          <BlinkingCursor size={cellSize} color={colors.primary} />
         </View>
       )}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -222,13 +261,21 @@ export function KatakanaKeyboard({ keySize: _keySizeProp, keyGap }: KatakanaKeyb
   const colors = useColors();
   const { width } = useWindowDimensions();
 
+  // シェイク発火カウンター（invalidShakeが立つたびにインクリメント）
+  const [shakeSignal, setShakeSignal] = useState(0);
+  useEffect(() => {
+    if (state.invalidShake) {
+      setShakeSignal((n) => n + 1);
+    }
+  }, [state.invalidShake]);
+
   const NUM_COLS = 10;
   const PADDING_H = 16;
   const availW = width - PADDING_H - keyGap * (NUM_COLS - 1);
   const keyW = Math.max(Math.floor(availW / NUM_COLS), 18);
   const fontSize = Math.max(Math.floor(keyW * 0.48), 9);
 
-  // 入力欄のセルサイズ（固定値：縦幅を適度に保つ）
+  // 入力欄のセルサイズ（固定値）
   const inputCellSize = 48;
 
   const isInputFull = state.currentInput.length === WORD_LENGTH;
@@ -238,6 +285,7 @@ export function KatakanaKeyboard({ keySize: _keySizeProp, keyGap }: KatakanaKeyb
 
   const handleKeyPress = (char: string) => {
     if (char === "BS") {
+      // BSキー：カーソル左削除（ツールバーの「左を削除」と同じ動作）
       deleteChar();
     } else if (char === "◀" || char === "▶") {
       // キーボード内の◀▶は使わない（ツールバーで操作）
@@ -266,7 +314,11 @@ export function KatakanaKeyboard({ keySize: _keySizeProp, keyGap }: KatakanaKeyb
     <View style={styles.container}>
       {/* 入力欄：カーソル付き5マスセル + 決定ボタン */}
       <View style={[styles.topRow, { marginBottom: keyGap + 2 }]}>
-        <InputBar cellSize={inputCellSize} colors={colors} />
+        <InputBar
+          cellSize={inputCellSize}
+          colors={colors}
+          shakeSignal={shakeSignal}
+        />
         <Pressable
           onPress={submitRow}
           style={({ pressed }) => [
