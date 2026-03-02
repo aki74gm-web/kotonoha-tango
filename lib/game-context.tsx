@@ -37,7 +37,8 @@ import {
 // 型定義
 // ============================================================
 
-export type GameStatus = "playing" | "won" | "lost";
+/** waiting: スタート前 / playing: ゲーム中 / won: 正解 / lost: 不正解終了 */
+export type GameStatus = "waiting" | "playing" | "won" | "lost";
 
 export interface GameState {
   answer: string;
@@ -54,6 +55,7 @@ export interface GameState {
 }
 
 type GameAction =
+  | { type: "START_GAME" }             // スタートボタンを押してゲーム開始
   | { type: "INPUT_CHAR"; char: string }
   | { type: "DELETE_CHAR" }           // カーソル左の文字を削除（バックスペース）
   | { type: "DELETE_CHAR_RIGHT" }     // カーソル右の文字を削除（デリート）
@@ -70,6 +72,11 @@ type GameAction =
 
 function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
+    case "START_GAME": {
+      if (state.status !== "waiting") return state;
+      return { ...state, status: "playing" };
+    }
+
     case "INPUT_CHAR": {
       if (state.status !== "playing") return state;
       if (state.currentInput.length >= WORD_LENGTH) return state;
@@ -81,7 +88,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         currentInput: newInput,
         cursorPos: state.cursorPos + 1,
-        // グリッドは更新しない（入力欄バッファのみ）
       };
     }
 
@@ -109,7 +115,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return {
         ...state,
         currentInput: newInput,
-        // カーソル位置は変わらない
       };
     }
 
@@ -178,7 +183,7 @@ function createInitialState(seed?: string): GameState {
     currentRow: 0,
     currentInput: "",
     cursorPos: 0,
-    status: "playing",
+    status: "waiting",   // 起動時はスタート前
     invalidShake: false,
     revealRow: null,
   };
@@ -198,6 +203,7 @@ interface GameContextValue {
   moveCursorLeft: () => void;
   moveCursorRight: () => void;
   submitRow: () => void;
+  startGame: () => void;
   newGame: (seed?: string) => void;
 }
 
@@ -244,6 +250,10 @@ export function GameProvider({ children, initialSeed }: { children: React.ReactN
     dispatch({ type: "SUBMIT_ROW" });
   }, []);
 
+  const startGame = useCallback(() => {
+    dispatch({ type: "START_GAME" });
+  }, []);
+
   const newGame = useCallback((seed?: string) => {
     dispatch({ type: "NEW_GAME", seed });
   }, []);
@@ -259,6 +269,7 @@ export function GameProvider({ children, initialSeed }: { children: React.ReactN
       moveCursorLeft,
       moveCursorRight,
       submitRow,
+      startGame,
       newGame,
     }}>
       {children}

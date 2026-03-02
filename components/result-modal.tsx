@@ -99,7 +99,7 @@ function CopyButton({
 // ============================================================
 
 export function ResultModal() {
-  const { state, newGame } = useGame();
+  const { state, newGame, dispatch } = useGame();
   const colors = useColors();
   const slideAnim = useRef(new Animated.Value(300)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -150,6 +150,7 @@ export function ResultModal() {
   };
 
   const handleNewGame = () => {
+    // 新しいゲームはwaitingに戻る（スタートボタンを再度押す必要がある）
     newGame();
   };
 

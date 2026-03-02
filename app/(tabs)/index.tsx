@@ -52,35 +52,73 @@ function Toast({ message, visible }: { message: string; visible: boolean }) {
 }
 
 // ============================================================
-// タイマーコンポーネント
+// 経過時間タイマー
 // ============================================================
 
-function CountdownTimer() {
+function ElapsedTimer({ startedAt, stopped }: { startedAt: number | null; stopped: boolean }) {
   const colors = useColors();
-  const [timeLeft, setTimeLeft] = useState("");
+  const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    const update = () => {
-      const now = new Date();
-      const next = new Date();
-      next.setHours(24, 0, 0, 0);
-      const diff = next.getTime() - now.getTime();
-      const h = Math.floor(diff / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
-      const s = Math.floor((diff % 60000) / 1000);
-      setTimeLeft(
-        `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
-      );
-    };
-    update();
-    const id = setInterval(update, 1000);
+    if (startedAt === null || stopped) return;
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [startedAt, stopped]);
+
+  // startedAtがnullのとき（waiting状態）は "0:00" を表示
+  const display = startedAt === null ? "0:00" : formatElapsed(elapsed);
 
   return (
     <Text style={[styles.timerText, { color: colors.foreground }]}>
-      残り時間：{timeLeft}
+      経過時間：{display}
     </Text>
+  );
+}
+
+function formatElapsed(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+// ============================================================
+// スタートオーバーレイ
+// ============================================================
+
+function StartOverlay({ onStart }: { onStart: () => void }) {
+  const colors = useColors();
+  return (
+    <View style={[styles.startOverlay, { backgroundColor: colors.background + "E8" }]}>
+      <Text style={[styles.startTitle, { color: colors.foreground }]}>ことのはたんご</Text>
+      <Text style={[styles.startDesc, { color: colors.muted }]}>
+        5文字のカタカナ単語を{MAX_TRIES}回以内に当てよう
+      </Text>
+      <Pressable
+        onPress={onStart}
+        style={({ pressed }) => [
+          styles.startBtn,
+          { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] },
+        ]}
+      >
+        <Text style={[styles.startBtnText, { color: "#FFFFFF" }]}>スタート</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+// ============================================================
+// 不正解終了時の答え表示バナー
+// ============================================================
+
+function AnswerBanner({ answer }: { answer: string }) {
+  const colors = useColors();
+  return (
+    <View style={[styles.answerBanner, { backgroundColor: colors.error + "22", borderColor: colors.error }]}>
+      <Text style={[styles.answerLabel, { color: colors.error }]}>正解</Text>
+      <Text style={[styles.answerText, { color: colors.foreground }]}>{answer}</Text>
+    </View>
   );
 }
 
@@ -90,7 +128,8 @@ function CountdownTimer() {
 
 function BottomToolbar() {
   const colors = useColors();
-  const { submitRow, moveCursorLeft, moveCursorRight, deleteChar, deleteCharRight } = useGame();
+  const { submitRow, moveCursorLeft, moveCursorRight, deleteChar, deleteCharRight, state } = useGame();
+  const isDisabled = state.status !== "playing";
 
   const tools = [
     { label: "左に移動", icon: "◀", onPress: moveCursorLeft },
@@ -105,13 +144,13 @@ function BottomToolbar() {
       {tools.map((tool, i) => (
         <Pressable
           key={i}
-          onPress={tool.onPress}
+          onPress={isDisabled ? undefined : tool.onPress}
           style={({ pressed }) => [
             styles.toolBtn,
             {
               backgroundColor: colors.background,
               borderColor: colors.border,
-              opacity: pressed ? 0.7 : 1,
+              opacity: isDisabled ? 0.4 : pressed ? 0.7 : 1,
             },
           ]}
         >
@@ -131,18 +170,35 @@ function GameScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
-  const { state, newGame } = useGame();
+  const { state, newGame, startGame } = useGame();
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
   const shareUrl = useShareUrl(state.seed);
+
+  // 経過時間管理
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const timerStopped = state.status === "won" || state.status === "lost";
+
+  // スタートボタンを押したとき
+  const handleStart = () => {
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setStartedAt(Date.now());
+    startGame();
+  };
+
+  // 新しいゲームを開始するときはタイマーをリセット
+  const handleNewGame = (seed?: string) => {
+    setStartedAt(null);
+    newGame(seed);
+  };
 
   const deepLinkSeed = useDeepLinkSeed();
   const appliedSeedRef = useRef<string | null>(null);
   useEffect(() => {
     if (deepLinkSeed && deepLinkSeed !== appliedSeedRef.current && deepLinkSeed !== state.seed) {
       appliedSeedRef.current = deepLinkSeed;
-      newGame(deepLinkSeed);
+      handleNewGame(deepLinkSeed);
     }
   }, [deepLinkSeed]);
 
@@ -175,30 +231,26 @@ function GameScreen() {
   const HEADER_H = 44;
   const SUBHEADER_H = 28;
   const TOOLBAR_H = 52;
-  const KB_KEY_ROWS = 5;  // 五十音5行 + 濁点5行
+  const KB_KEY_ROWS = 5;
   const KEY_GAP = 3;
   const TILE_GAP = 3;
-  const HALF_TRIES = MAX_TRIES / 2; // 5
 
-  // キーボード高さ = 上部ボタン行(34) + 五十音5行 + セクションgap + 濁点5行 + padding
   const KB_TOP_ROW_H = 34;
   const KB_SECTION_GAP = 5;
   const KB_FIXED_H = KB_TOP_ROW_H + KB_SECTION_GAP * 3 + KEY_GAP * (KB_KEY_ROWS - 1) * 2 + 8;
 
   const totalAvailable = height - topInset - bottomInset - HEADER_H - SUBHEADER_H - TOOLBAR_H;
 
-  // タイル幅制約（グリッドが2分割なので幅は半分）
   const GRID_PADDING = 8;
   const GRID_GAP = 8;
-  // gridWrapper: padding=6, gap=8、左右分割
   const halfWidth = (width - GRID_PADDING * 2 - 12 - GRID_GAP) / 2;
   const maxTileByWidth = Math.floor((halfWidth - TILE_GAP * (WORD_LENGTH - 1)) / WORD_LENGTH);
-
-  // タイルサイズは幅制約で固定
   const tileSize = Math.max(maxTileByWidth, 10);
-  // グリッド・キーボードを画面の50:50に配分する
   const halfAvail = Math.floor(totalAvailable / 2);
   const keySize = Math.max(Math.floor((halfAvail - KB_FIXED_H) / (KB_KEY_ROWS * 2)), 18);
+
+  const isWaiting = state.status === "waiting";
+  const isLost = state.status === "lost";
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: topInset }]}>
@@ -229,7 +281,7 @@ function GameScreen() {
         </View>
       </View>
 
-      {/* サブヘッダー：残り候補数・回数・タイマー */}
+      {/* サブヘッダー：残り候補数・回数・経過時間 */}
       <View style={[styles.subHeader, { height: SUBHEADER_H, backgroundColor: colors.gridBg }]}>
         <Text style={[styles.subHeaderText, { color: colors.foreground }]}>
           残り候補数：—
@@ -237,16 +289,20 @@ function GameScreen() {
         <Text style={[styles.subHeaderText, { color: colors.foreground }]}>
           第{Math.floor((Date.now() - new Date('2024-01-01').getTime()) / 86400000) + 1}回
         </Text>
-        <CountdownTimer />
+        <ElapsedTimer startedAt={startedAt} stopped={timerStopped} />
       </View>
 
       {/* グリッドエリア */}
       <View style={styles.gridArea}>
         <GameGrid tileSize={tileSize} tileGap={TILE_GAP} />
+        {/* 不正解終了時：答えを表示 */}
+        {isLost && <AnswerBanner answer={state.answer} />}
+        {/* スタート前：スタートオーバーレイ */}
+        {isWaiting && <StartOverlay onStart={handleStart} />}
       </View>
 
-      {/* キーボード */}
-      <View style={[styles.keyboardArea, { borderTopColor: colors.border }]}>
+      {/* キーボード（waiting中は薄く表示） */}
+      <View style={[styles.keyboardArea, { borderTopColor: colors.border, opacity: isWaiting ? 0.35 : 1 }]}>
         <KatakanaKeyboard keySize={keySize} keyGap={KEY_GAP} />
       </View>
 
@@ -358,4 +414,54 @@ const styles = StyleSheet.create({
     zIndex: 999,
   },
   toastText: { fontSize: 14, fontWeight: "600" },
+  // スタートオーバーレイ
+  startOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+    zIndex: 10,
+  },
+  startTitle: {
+    fontSize: 26,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+  },
+  startDesc: {
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 20,
+    paddingHorizontal: 24,
+  },
+  startBtn: {
+    paddingHorizontal: 48,
+    paddingVertical: 14,
+    borderRadius: 30,
+    marginTop: 8,
+  },
+  startBtnText: {
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: 1,
+  },
+  // 答えバナー
+  answerBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    marginTop: 8,
+  },
+  answerLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  answerText: {
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: 2,
+  },
 });
