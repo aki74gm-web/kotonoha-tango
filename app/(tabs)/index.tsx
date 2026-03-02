@@ -288,20 +288,18 @@ function GameScreen() {
       {/* ヘッダー */}
       <View style={[styles.header, { height: HEADER_H, borderBottomColor: colors.border }]}>
         <View style={styles.headerLeft}>
-          <Pressable style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.6 : 1 }]}>
-            <Text style={[styles.headerIcon, { color: colors.foreground }]}>?</Text>
-          </Pressable>
-          <Pressable style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.6 : 1 }]}>
-            <Text style={[styles.headerIcon, { color: colors.foreground }]}>✏</Text>
+          {/* 共有ボタン */}
+          <Pressable
+            onPress={handleShare}
+            style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.6 : 1 }]}
+          >
+            <IconSymbol name="square.and.arrow.up" size={20} color={colors.foreground} />
           </Pressable>
         </View>
 
         <Text style={[styles.title, { color: colors.foreground }]}>ことのはたんご</Text>
 
         <View style={styles.headerRight}>
-          <Pressable style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.6 : 1 }]}>
-            <IconSymbol name="chart.bar.fill" size={20} color={colors.foreground} />
-          </Pressable>
           <Pressable
             onPress={() => setSettingsVisible(true)}
             style={({ pressed }) => [styles.headerBtn, { opacity: pressed ? 0.6 : 1 }]}
@@ -311,13 +309,10 @@ function GameScreen() {
         </View>
       </View>
 
-      {/* サブヘッダー：残り候補数・回数・経過時間 */}
+      {/* サブヘッダー：問題ID・経過時間 */}
       <View style={[styles.subHeader, { height: SUBHEADER_H, backgroundColor: colors.gridBg }]}>
-        <Text style={[styles.subHeaderText, { color: colors.foreground }]}>
-          残り候補数：—
-        </Text>
-        <Text style={[styles.subHeaderText, { color: colors.foreground }]}>
-          第{Math.floor((Date.now() - new Date('2024-01-01').getTime()) / 86400000) + 1}回
+        <Text style={[styles.subHeaderText, { color: colors.muted }]}>
+          問題ID：{state.seed}
         </Text>
         <ElapsedTimer startedAt={startedAt} stopped={timerStopped} />
       </View>

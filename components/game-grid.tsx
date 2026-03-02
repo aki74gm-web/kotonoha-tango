@@ -259,7 +259,7 @@ export function GameGrid({ tileSize: tileSizeProp, tileGap }: GameGridProps) {
           ))}
         </View>
 
-        {/* 右グリッド：丸（6〜10答目） */}
+        {/* 右グリッド：四角（6〜10答目） */}
         <View style={[styles.grid, { gap: tileGap }]}>
           {displayGrid.slice(HALF, MAX_TRIES).map((row, ri) => (
             <RowView
@@ -271,7 +271,7 @@ export function GameGrid({ tileSize: tileSizeProp, tileGap }: GameGridProps) {
               tileSize={tileSize}
               tileGap={tileGap}
               fontSize={fontSize}
-              shape="circle"
+              shape="square"
             />
           ))}
         </View>
