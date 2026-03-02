@@ -104,8 +104,15 @@ export function ResultModal() {
   const slideAnim = useRef(new Animated.Value(300)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const shareUrl = useShareUrl(state.seed);
+  const [dismissed, setDismissed] = useState(false);
 
-  const isVisible = state.status === "won" || state.status === "lost";
+  const isFinished = state.status === "won" || state.status === "lost";
+  const isVisible = isFinished && !dismissed;
+
+  // ゲーム状態が変わったら（新しいゲーム開始）dismissedをリセット
+  useEffect(() => {
+    setDismissed(false);
+  }, [state.seed]);
 
   useEffect(() => {
     if (isVisible) {
@@ -151,7 +158,13 @@ export function ResultModal() {
 
   const handleNewGame = () => {
     // 新しいゲームはwaitingに戻る（スタートボタンを再度押す必要がある）
+    setDismissed(false);
     newGame();
+  };
+
+  const handleViewBoard = () => {
+    // モーダルを閉じて盤面を確認できるようにする
+    setDismissed(true);
   };
 
   if (!isVisible) return null;
@@ -222,6 +235,19 @@ export function ResultModal() {
               style={{ borderWidth: 2, borderColor: colors.primary }}
               textStyle={{ color: colors.primary }}
             />
+
+            {/* 盤面を見る */}
+            <Pressable
+              onPress={handleViewBoard}
+              style={({ pressed }) => [
+                styles.btn,
+                styles.newGameBtn,
+                { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+              <IconSymbol name="eye" size={16} color={colors.muted} />
+              <Text style={[styles.btnTextMuted, { color: colors.muted }]}>盤面を見る</Text>
+            </Pressable>
 
             {/* 新しいゲーム */}
             <Pressable

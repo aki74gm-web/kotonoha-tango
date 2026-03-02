@@ -189,6 +189,16 @@ export interface GameGridProps {
 
 export function GameGrid({ tileSize: tileSizeProp, tileGap }: GameGridProps) {
   const { state, dispatch } = useGame();
+
+  // currentInputの文字をcurrentRow行に表示用として重ねる（実際のgrid stateは変えない）
+  const displayGrid = state.grid.map((row, ri) => {
+    if (ri !== state.currentRow || state.status !== "playing") return row;
+    return row.map((tile, ci) => {
+      const char = state.currentInput[ci] ?? "";
+      if (!char) return tile; // 文字がなければそのまま
+      return { char, status: "filled" as const };
+    });
+  });
   const colors = useColors();
   const { width } = useWindowDimensions();
   const [containerH, setContainerH] = useState(0);
@@ -234,7 +244,7 @@ export function GameGrid({ tileSize: tileSizeProp, tileGap }: GameGridProps) {
       >
         {/* 左グリッド：四角（1〜5答目） */}
         <View style={[styles.grid, { gap: tileGap }]}>
-          {state.grid.slice(0, HALF).map((row, ri) => (
+          {displayGrid.slice(0, HALF).map((row, ri) => (
             <RowView
               key={ri}
               tiles={row}
@@ -251,7 +261,7 @@ export function GameGrid({ tileSize: tileSizeProp, tileGap }: GameGridProps) {
 
         {/* 右グリッド：丸（6〜10答目） */}
         <View style={[styles.grid, { gap: tileGap }]}>
-          {state.grid.slice(HALF, MAX_TRIES).map((row, ri) => (
+          {displayGrid.slice(HALF, MAX_TRIES).map((row, ri) => (
             <RowView
               key={ri + HALF}
               tiles={row}
